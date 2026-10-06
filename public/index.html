@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1210">
 <title>Hitline – Player Prop Research</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;600;700&display=swap">
@@ -37,6 +38,35 @@ button,select,input{font:inherit;color:inherit}
 .chart{height:260px;margin:12px 0}
 .why{margin:0;padding:0;list-style:none;display:grid;gap:5px;font-size:13px}.why li::before{content:'• ';color:var(--acc)}.ctx{border:1px solid var(--line);border-radius:10px;padding:10px;display:grid;gap:4px;font-size:13px}.ctx b{color:var(--tx)}h4{margin:14px 0 6px;font:700 14px 'Bricolage Grotesque',sans-serif}
 .foot{color:var(--mut);font-size:12px;margin:28px 0 8px;border-top:1px solid var(--line);padding-top:14px}
+
+/* ---- phone layout ---- */
+.seg button,.btn,select.field,input.field{min-height:44px}
+.seg button{white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+@media (max-width:640px){
+  body{font-size:15px}
+  .wrap{padding:12px 12px calc(76px + env(safe-area-inset-bottom,0px))}
+  h1{font-size:24px!important}
+  .bar{margin:10px 0;gap:8px}
+  #tabs{position:fixed;left:0;right:0;bottom:0;z-index:9;border-radius:0;border-width:1px 0 0;background:var(--card);padding-bottom:env(safe-area-inset-bottom,0px)}
+  #tabs button{flex:1;padding:12px 6px}
+  #sports{width:100%}#sports button{flex:1}
+  #splits{width:100%;overflow-x:auto}#splits button{flex:1;padding:7px 14px}
+  .bar label{flex:1 1 44%;display:flex;flex-direction:column;gap:2px}
+  .bar label select{width:100%}
+  #q{flex:1 1 100%!important;min-width:0!important}
+  .grid{grid-template-columns:1fr;gap:12px}
+  .card{padding:14px}
+  .big{font-size:38px}
+  .modal{align-items:flex-end;padding:0}
+  .sheet{max-width:none;border-radius:18px 18px 0 0;max-height:94vh;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+  .chart{height:230px}
+  .sheet .row{flex-wrap:wrap}
+  .sheet #mSave{width:100%}
+  .foot{margin-bottom:24px}
+}
+@media (hover:none){.btn:active,.seg button:active{opacity:.7}}
 </style>
 </head>
 <body>
@@ -51,7 +81,7 @@ button,select,input{font:inherit;color:inherit}
     <div class="seg" id="sports" aria-label="Sport"></div>
   </div>
   <div class="bar">
-    <div class="seg" id="splits" aria-label="Split"></div>
+    <div class="seg scroll" id="splits" aria-label="Split"></div>
     <label><span class="mut">Market </span><select id="mkt" class="field" aria-label="Market"></select></label>
     <label><span class="mut">Min hit </span><select id="minHit" class="field"><option value="0">Any</option><option value="60">60%+</option><option value="80">80%+</option><option value="100">100%</option></select></label>
     <label><span class="mut">Sort </span><select id="sort" class="field"><option value="hit">Hit rate</option><option value="edge">Edge</option><option value="odds">Best odds</option></select></label>
