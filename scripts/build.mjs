@@ -20,8 +20,10 @@ const sleep = (ms) => new Promise((z) => setTimeout(z, ms));
 // Retries rate-limited (429) requests, honouring Retry-After
 const getText = async (url) => {
   for (let i = 0; ; i++) {
-    const r = await fetch(url, { signal: AbortSignal.timeout(60000) });
-    if (r.status === 429 && i < 3) { await sleep(Math.min(Number(r.headers.get('retry-after')) || 2 * (i + 1), 20) * 1000); continue; }
+    let r;
+    try { r = await fetch(url, { signal: AbortSignal.timeout(60000) }); }
+    catch (e) { if (i < 3) { await sleep(1000 * (i + 1)); continue; } throw e; }
+    if ((r.status === 429 || r.status >= 500) && i < 3) { await sleep(Math.min(Number(r.headers.get('retry-after')) || 2 * (i + 1), 20) * 1000); continue; }
     if (!r.ok) throw new Error(`${r.status} ${url.replace(/apiKey=[^&]+/, 'apiKey=***')}`);
     return r.text();
   }
@@ -80,11 +82,16 @@ async function oddsProps(cfg, sport) {
   for (const r of res) {
     if (!r || !r.o) continue;
     for (const b of (r.o.bookmakers || []).filter(okBook)) for (const m of b.markets || []) for (const x of m.outcomes || []) {
-      if (x.name !== 'Over' || !cfg.list[m.key]) continue;
-      const pname = String(x.description || '').replace(/\s*\([^)]*\)\s*$/, '').trim(); // some feeds append "(TEAM)"
+      if (!cfg.list[m.key]) continue;
+      let who = x.description, line = x.point;
+      if (x.name === 'Over' && x.point != null) { /* normal over/under */ }
+      else if (m.key === 'player_goals' && x.point == null && !/^(under|no)$/i.test(x.name) && !/^\d+\+/.test(x.name)) {
+        who = x.name === 'Yes' ? x.description : x.name; line = 0.5; // anytime goal scorer = over 0.5 goals
+      } else continue;
+      const pname = String(who || '').replace(/\s*\([^)]*\)\s*$/, '').trim(); // some feeds append "(TEAM)"
       const k = `${norm(pname)}|${m.key}`;
       if (!map.has(k)) map.set(k, { player: pname, mkey: m.key, event: r.e, books: [] });
-      map.get(k).books.push({ book: b.title, line: x.point, odds: x.price });
+      map.get(k).books.push({ book: b.title, line, odds: x.price });
     }
   }
   return [...map.values()];
@@ -142,14 +149,21 @@ async function nhl(errors) {
   const injMap = await injuries(cfg.espn);
   const now = new Date(), y = now.getFullYear(), s = now.getMonth() >= 8 ? y : y - 1, seasons = [`${s}${s + 1}`, `${s - 1}${s}`];
   const cache = new Map();
-  const logs = (id) => { if (!cache.has(id)) cache.set(id, (async () => { let all = []; for (const se of seasons) { try { all = all.concat(((await getJson(`${NHLAPI}/player/${id}/game-log/${se}/2`)).gameLog || []).filter((x) => String(x.gameId).slice(4, 6) === '02')); } catch {} if (all.length >= 20) break; } return all.sort((a, b) => b.gameDate.localeCompare(a.gameDate)); })()); return cache.get(id); };
+  const logs = (id) => { if (!cache.has(id)) cache.set(id, (async () => { let all = []; for (const se of seasons) { try { all = all.concat(((await getJson(`${NHLAPI}/player/${id}/game-log/${se}/2`)).gameLog || []).filter((x) => String(x.gameId).slice(4, 6) === '02')); } catch (e) { const L = (DEBUG.logErrors = DEBUG.logErrors || []); if (L.length < 10) L.push(`${id} ${se}: ${e.message}`); } if (all.length >= 20) break; } return all.sort((a, b) => b.gameDate.localeCompare(a.gameDate)); })()); return cache.get(id); };
   const drops = { noRoster: [], shortLog: [] };
-  const res = await pool(raw, 8, async (r) => {
+  const findId = (m, n) => {
+    if (!m) return null;
+    if (m.has(n)) return m.get(n);
+    const [f, ...rest] = n.split(' '), l = rest.join(' ');
+    const c = [...m].filter(([rn]) => { const [rf, ...rr] = rn.split(' '); return rr.join(' ') === l && rf[0] === f[0]; });
+    return c.length === 1 ? c[0][1] : null;
+  };
+  const res = await pool(raw, 4, async (r) => {
     const e = r.event, h = abbr(e.home_team), a = abbr(e.away_team), n = norm(r.player);
-    const side = rosters[h]?.has(n) ? 'home' : rosters[a]?.has(n) ? 'away' : null;
+    const hid = findId(rosters[h], n), aid = findId(rosters[a], n), side = hid ? 'home' : aid ? 'away' : null;
     if (!side) { drops.noRoster.push(r.player); return null; }
     const stat = cfg.list[r.mkey][1];
-    const pid = rosters[side === 'home' ? h : a].get(n);
+    const pid = side === 'home' ? hid : aid;
     const rowsL = (await logs(pid)).slice(0, 20), g = [];
     for (const x of rowsL) {
       const v = BOX.has(stat) ? await boxStat(x.gameId, pid, stat) : x[stat];
