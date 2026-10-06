@@ -52,6 +52,7 @@ button,select,input{font:inherit;color:inherit}
   </div>
   <div class="bar">
     <div class="seg" id="splits" aria-label="Split"></div>
+    <label><span class="mut">Market </span><select id="mkt" class="field" aria-label="Market"></select></label>
     <label><span class="mut">Min hit </span><select id="minHit" class="field"><option value="0">Any</option><option value="60">60%+</option><option value="80">80%+</option><option value="100">100%</option></select></label>
     <label><span class="mut">Sort </span><select id="sort" class="field"><option value="hit">Hit rate</option><option value="edge">Edge</option><option value="odds">Best odds</option></select></label>
     <input id="q" class="field" style="flex:1;min-width:180px" placeholder="Search player, team or market" aria-label="Search">
@@ -103,7 +104,7 @@ function why(p,split,line){
   return out;
 }
 
-const S={sport:'nhl',tab:'cheat',split:'l5',minHit:0,sort:'hit',q:'',slip:[],modal:null,mline:0};
+const S={market:'all',sport:'nhl',tab:'cheat',split:'l5',minHit:0,sort:'hit',q:'',slip:[],modal:null,mline:0};
 try{S.slip=JSON.parse(localStorage.getItem('hitline-slip')||'[]')}catch(e){}
 const saveSlip=()=>{try{localStorage.setItem('hitline-slip',JSON.stringify(S.slip))}catch(e){}};
 const $=id=>document.getElementById(id);
@@ -135,10 +136,14 @@ function renderControls(){
 function render(){
   renderControls();
   if(!DB.length){$('banner').textContent='';$('grid').innerHTML='<div class="card" style="grid-column:1/-1">'+esc(ERR||'Loading props...')+'</div>';return}
+  const mk=['all',...[...new Set(DB.filter(p=>S.tab==='slip'||p.sport===S.sport).map(p=>p.market))].sort()];
+  if(!mk.includes(S.market))S.market='all';
+  $('mkt').innerHTML=mk.map(k=>`<option value="${esc(k)}"${k===S.market?' selected':''}>${k==='all'?'All markets':esc(k)}</option>`).join('');
   const q=S.q.toLowerCase();
   let list=DB.filter(p=>{
     if(S.tab==='slip'){if(!S.slip.includes(p.id))return false}
     else if(p.sport!==S.sport)return false;
+    if(S.market!=='all'&&p.market!==S.market)return false;
     const st=stats(p,S.split,p.line);
     if(!st.n)return false;
     if(S.tab==='cheat'&&st.pct<100)return false;
@@ -218,6 +223,7 @@ document.addEventListener('keydown',e=>{
     else if(!e.shiftKey&&i===f.length-1){e.preventDefault();f[0].focus()}
   }
 });
+$('mkt').onchange=e=>{S.market=e.target.value;render()};
 $('minHit').onchange=e=>{S.minHit=+e.target.value;render()};
 $('sort').onchange=e=>{S.sort=e.target.value;render()};
 $('q').oninput=e=>{S.q=e.target.value;render()};
