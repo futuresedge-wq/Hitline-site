@@ -1,4 +1,14 @@
 // Builds the props dataset: lines (The Odds API) + game logs (NHL API, nflverse) + injuries (ESPN, unofficial).
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+// NHL game logs are cached between runs (last season never changes; this season is refreshed after 12h)
+const LOGS = {};
+// Time budget: when it runs out, uncached players are skipped (they get picked up on the next run) so the site still publishes
+let START = Date.now();
+const budgetMs = () => Number(process.env.BUILD_MINUTES || 15) * 60000;
+let FETCHED = 0;
+export function loadCache(path) { try { Object.assign(LOGS, JSON.parse(readFileSync(path, 'utf8'))); } catch {} }
+export function saveCache(path) { try { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, JSON.stringify(LOGS)); } catch {} }
 const ODDS = 'https://api.the-odds-api.com/v4';
 const NHLAPI = 'https://api-web.nhle.com/v1';
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
@@ -9,7 +19,8 @@ const MARKETS = {
     player_goals_2plus: ['Goals', 'goals'], player_points_1plus: ['Points', 'points'], player_points_2plus: ['Points', 'points'], player_points_3plus: ['Points', 'points'], goalie_saves: ['Saves', 'saves'] } },
   nfl: { key: 'americanfootball_nfl', espn: 'football/nfl', list: {
     player_rush_yds: ['Rushing yards', 'rushing_yards'], player_reception_yds: ['Receiving yards', 'receiving_yards'], player_receptions: ['Receptions', 'receptions'],
-    player_pass_yds: ['Passing yards', 'passing_yards'], player_rush_attempts: ['Rush attempts', 'carries'] } },
+    player_pass_yds: ['Passing yards', 'passing_yards'], player_rush_attempts: ['Rush attempts', 'carries'],
+    player_pass_tds: ['Passing TDs', 'passing_tds'], player_anytime_td: ['Touchdowns', 'tds'], player_2plus_td: ['Touchdowns', 'tds'] } },
 };
 const NFL = { 'Arizona Cardinals':'ARI','Atlanta Falcons':'ATL','Baltimore Ravens':'BAL','Buffalo Bills':'BUF','Carolina Panthers':'CAR','Chicago Bears':'CHI','Cincinnati Bengals':'CIN','Cleveland Browns':'CLE','Dallas Cowboys':'DAL','Denver Broncos':'DEN','Detroit Lions':'DET','Green Bay Packers':'GB','Houston Texans':'HOU','Indianapolis Colts':'IND','Jacksonville Jaguars':'JAX','Kansas City Chiefs':'KC','Las Vegas Raiders':'LV','Los Angeles Chargers':'LAC','Los Angeles Rams':'LA','Miami Dolphins':'MIA','Minnesota Vikings':'MIN','New England Patriots':'NE','New Orleans Saints':'NO','New York Giants':'NYG','New York Jets':'NYJ','Philadelphia Eagles':'PHI','Pittsburgh Steelers':'PIT','San Francisco 49ers':'SF','Seattle Seahawks':'SEA','Tampa Bay Buccaneers':'TB','Tennessee Titans':'TEN','Washington Commanders':'WAS' };
 const lev = (a, b) => {
@@ -19,6 +30,7 @@ const lev = (a, b) => {
   return d[a.length][b.length];
 };
 const DEBUG = {}; // shown in /api/props to help diagnose missing games
+const ANYTIME = new Set(['player_goals', 'player_anytime_td']); // anytime-scorer prices are over 0.5
 const ab = (t) => (t === 'LAR' ? 'LA' : t);
 
 const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/-/g, ' ').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
@@ -28,7 +40,7 @@ const sleep = (ms) => new Promise((z) => setTimeout(z, ms));
 const getText = async (url) => {
   for (let i = 0; ; i++) {
     let r;
-    try { r = await fetch(url, { signal: AbortSignal.timeout(60000) }); }
+    try { r = await fetch(url, { signal: AbortSignal.timeout(45000) }); }
     catch (e) { if (i < 3) { await sleep(1000 * (i + 1)); continue; } throw e; }
     if ((r.status === 429 || r.status >= 500) && i < 3) { await sleep(Math.min(Number(r.headers.get('retry-after')) || 2 * (i + 1), 20) * 1000); continue; }
     if (!r.ok) throw new Error(`${r.status} ${url.replace(/apiKey=[^&]+/, 'apiKey=***')}`);
@@ -57,7 +69,7 @@ async function oddsProps(cfg, sport) {
   const key = process.env[`${U}_ODDS_KEY`] || process.env.ODDS_API_KEY;
   const base = process.env[`${U}_ODDS_BASE_URL`] || process.env.ODDS_BASE_URL || ODDS;
   if (!key) throw new Error(`No odds API key set for ${sport} (set ${U}_ODDS_KEY or ODDS_API_KEY)`);
-  const regions = process.env.ODDS_REGIONS || 'us', horizon = Number(process.env.HORIZON_HOURS || 36);
+  const regions = process.env.ODDS_REGIONS || 'us', horizon = Number(process.env[`${U}_HORIZON_HOURS`] || process.env.HORIZON_HOURS || 36);
   const events = await getJson(`${base}/sports/${cfg.key}/events?apiKey=${key}`);
   const soon = events.filter((e) => { const h = (new Date(e.commence_time) - Date.now()) / 36e5; return h > -1 && h < horizon; }).slice(0, Number(process.env.MAX_EVENTS || 50));
   const only = (process.env.MARKETS || '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -68,6 +80,7 @@ async function oddsProps(cfg, sport) {
     try { return { e, o: await getJson(`${base}/sports/${cfg.key}/events/${e.id}/odds?apiKey=${key}&regions=${regions}&markets=${markets}&oddsFormat=american`) }; }
     catch (err) { return { e, err: err.message }; }
   });
+  console.log(`${sport}: odds for ${soon.length} games fetched, ${Math.round((Date.now() - START) / 1000)}s elapsed`);
   DEBUG[sport] = { eventsListed: events.length, inWindow: soon.length, games: res.map((r) => (r ? `${r.e.away_team} @ ${r.e.home_team}: ${r.err ? 'ERROR ' + r.err : (r.o.bookmakers || []).length + ' books'}` : 'failed')) };
   // Everything the feed returned, before any filtering, so missing markets can be diagnosed
   const seen = {};
@@ -91,13 +104,13 @@ async function oddsProps(cfg, sport) {
     for (const b of (r.o.bookmakers || []).filter(okBook)) for (const m of b.markets || []) for (const x of m.outcomes || []) {
       if (!cfg.list[m.key]) continue;
       let who = x.description, line = x.point;
-      const ms = /_(\d)plus$/.exec(m.key); // milestone market: 2plus = over 1.5
+      const ms = /(?:^|_)(\d)plus(?:_|$)/.exec(m.key); // milestone market: 2plus = over 1.5
       if (ms) {
         if (/^(under|no)$/i.test(x.name)) continue;
         who = /^(yes|over)$/i.test(x.name) || /^\d+\+/.test(x.name) ? x.description : x.name;
         line = Number(ms[1]) - 0.5;
       } else if (x.name === 'Over' && x.point != null) { /* normal over/under */ }
-      else if (m.key === 'player_goals' && x.point == null && !/^(under|no)$/i.test(x.name) && !/^\d+\+/.test(x.name)) {
+      else if (ANYTIME.has(m.key) && x.point == null && !/^(under|no)$/i.test(x.name) && !/^\d+\+/.test(x.name)) {
         who = x.name === 'Yes' ? x.description : x.name; line = 0.5; // anytime goal scorer = over 0.5 goals
       } else continue;
       const pname = String(who || '').replace(/\s*\([^)]*\)\s*$/, '').replace(/^([^,]+),\s*(.+)$/, '$2 $1').trim(); // some feeds append "(TEAM)"
@@ -142,6 +155,7 @@ function assemble(sport, r, games, team, opp, home, injMap, teamFull, oppFull) {
 const BOX = new Set(['blockedShots']);
 const boxes = new Map();
 async function boxStat(gid, pid, stat) {
+  if (Date.now() - START > budgetMs()) return null;
   if (!boxes.has(gid)) boxes.set(gid, getJson(`${NHLAPI}/gamecenter/${gid}/boxscore`).catch(() => null));
   const b = await boxes.get(gid);
   if (!b) return null;
@@ -161,7 +175,27 @@ async function nhl(errors) {
   const injMap = await injuries(cfg.espn);
   const now = new Date(), y = now.getFullYear(), s = now.getMonth() >= 8 ? y : y - 1, seasons = [`${s}${s + 1}`, `${s - 1}${s}`];
   const cache = new Map();
-  const logs = (id) => { if (!cache.has(id)) cache.set(id, (async () => { let all = []; for (const se of seasons) { try { all = all.concat(((await getJson(`${NHLAPI}/player/${id}/game-log/${se}/2`)).gameLog || []).filter((x) => String(x.gameId).slice(4, 6) === '02')); } catch (e) { const L = (DEBUG.logErrors = DEBUG.logErrors || []); if (L.length < 10) L.push(`${id} ${se}: ${e.message}`); } if (all.length >= 20) break; } return all.sort((a, b) => b.gameDate.localeCompare(a.gameDate)); })()); return cache.get(id); };
+  const logs = (id) => { if (!cache.has(id)) cache.set(id, (async () => {
+    let all = [];
+    for (const se of seasons) {
+      const k = `${id}:${se}`, c = LOGS[k], stale = se === seasons[0] && (!c || Date.now() - c.t > 12 * 36e5);
+      let rows = c && !stale ? c.rows : null;
+      if (!rows && Date.now() - START > budgetMs()) { DEBUG.timeBudgetHit = true; rows = c ? c.rows : []; }
+      if (!rows) {
+        try {
+          rows = ((await getJson(`${NHLAPI}/player/${id}/game-log/${se}/2`)).gameLog || [])
+            .filter((x) => String(x.gameId).slice(4, 6) === '02')
+            .sort((a, b) => b.gameDate.localeCompare(a.gameDate)).slice(0, 25)
+            .map((x) => ({ gameId: x.gameId, gameDate: x.gameDate, opponentAbbrev: x.opponentAbbrev, homeRoadFlag: x.homeRoadFlag, goals: x.goals, assists: x.assists, points: x.points, shots: x.shots, shotsAgainst: x.shotsAgainst, goalsAgainst: x.goalsAgainst, gamesStarted: x.gamesStarted }));
+          LOGS[k] = { t: Date.now(), rows };
+          if (++FETCHED % 25 === 0) console.log(`nhl: fetched ${FETCHED} game logs, ${Math.round((Date.now() - START) / 1000)}s elapsed`);
+        } catch (e) { const L = (DEBUG.logErrors = DEBUG.logErrors || []); if (L.length < 10) L.push(`${id} ${se}: ${e.message}`); rows = c ? c.rows : []; }
+      }
+      all = all.concat(rows);
+      if (all.length >= 20) break;
+    }
+    return all.sort((a, b) => b.gameDate.localeCompare(a.gameDate));
+  })()); return cache.get(id); };
   const drops = { noRoster: [], shortLog: [] };
   const findId = (m, n) => {
     if (!m) return null;
@@ -173,7 +207,7 @@ async function nhl(errors) {
     const near = [...m].filter(([rn]) => { const [rf, ...rr] = rn.split(' '); return rf[0] === f[0] && lev(rr.join(' '), l) <= 1; });
     return near.length === 1 ? near[0][1] : null;
   };
-  const res = await pool(raw, 4, async (r) => {
+  const res = await pool(raw, 8, async (r) => {
     const e = r.event, h = abbr(e.home_team), a = abbr(e.away_team), n = norm(r.player);
     const hid = findId(rosters[h], n), aid = findId(rosters[a], n), side = hid ? 'home' : aid ? 'away' : null;
     if (!side) { drops.noRoster.push(r.player); return null; }
@@ -210,20 +244,24 @@ async function nfl(errors) {
   for (const r of rows) { if (r.season_type && r.season_type !== 'REG') continue; const k = norm(r.player_display_name); if (!by.has(k)) by.set(k, []); by.get(k).push(r); }
   for (const v of by.values()) v.sort((a, b) => b.season - a.season || b.week - a.week);
   const injMap = await injuries(cfg.espn);
+  const drops = { noStats: [], teamMismatch: [], shortLog: [] };
   const out = raw.map((r) => {
     const e = r.event, h = ab(NFL[e.home_team]), a = ab(NFL[e.away_team]), list = by.get(norm(r.player));
-    if (!list || !h || !a) return null;
+    if (!list || !h || !a) { drops.noStats.push(r.player); return null; }
     const t = ab(list[0].team || list[0].recent_team), stat = cfg.list[r.mkey][1];
-    if (t !== h && t !== a) return null;
-    const g = list.slice(0, 20).map((x) => { const i = sched[`${x.season}|${x.week}|${x.team || x.recent_team}`]; return { v: x[stat] === undefined || x[stat] === '' ? null : +x[stat] || 0, opp: x.opponent_team, home: i ? i.home : null, date: i ? md(i.date) : `W${x.week}` }; });
-    if (g.length < 5 || g.some((x) => x.v === null)) return null;
+    if (t !== h && t !== a) { drops.teamMismatch.push(r.player); return null; }
+    const tdv = (x) => (x.rushing_tds === undefined || x.receiving_tds === undefined ? null : (+x.rushing_tds || 0) + (+x.receiving_tds || 0));
+    const g = list.slice(0, 20).map((x) => { const i = sched[`${x.season}|${x.week}|${x.team || x.recent_team}`]; return { v: stat === 'tds' ? tdv(x) : x[stat] === undefined || x[stat] === '' ? null : +x[stat] || 0, opp: x.opponent_team, home: i ? i.home : null, date: i ? md(i.date) : `W${x.week}` }; });
+    if (g.length < 5 || g.some((x) => x.v === null)) { drops.shortLog.push(r.player); return null; }
     const home = t === h;
     return assemble('nfl', r, g, t, home ? a : h, home, injMap, home ? e.home_team : e.away_team, home ? e.away_team : e.home_team);
   }).filter(Boolean);
+  DEBUG.nflDropped = { noStats: [...new Set(drops.noStats)].slice(0, 15), teamMismatch: [...new Set(drops.teamMismatch)].slice(0, 15), shortLog: [...new Set(drops.shortLog)].slice(0, 15) };
   return warn('nfl', raw, out, errors);
 }
 
 export async function build() {
+  START = Date.now();
   const out = { updated: new Date().toISOString(), props: [], errors: [], debug: DEBUG };
   for (const [sport, fn] of [['nhl', nhl], ['nfl', nfl]].filter(([sp]) => (process.env.SPORTS || 'nhl,nfl').includes(sp))) {
     try { out.props.push(...(await fn(out.errors))); } catch (e) { out.errors.push(`${sport}: ${e.message}`); }
