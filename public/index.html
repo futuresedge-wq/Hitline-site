@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hitline – Player Prop Research</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;600;700&display=swap">
+<style>
+:root{--bg:#0e1210;--card:#161c18;--line:#26302a;--tx:#e8efe9;--mut:#8a9a8f;--acc:#c6f24e;--hit:#c6f24e;--miss:#ff6b57;--mid:#f2b84e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root[data-theme="light"]{--bg:#f4f6f1;--card:#fff;--line:#d9e0d5;--tx:#18211b;--mut:#5d6d62;--acc:#2f6b00;--hit:#2f6b00;--miss:#c4361f;--mid:#9a6a00}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f6f1;--card:#fff;--line:#d9e0d5;--tx:#18211b;--mut:#5d6d62;--acc:#2f6b00;--hit:#2f6b00;--miss:#c4361f;--mid:#9a6a00}}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 Figtree,system-ui,sans-serif}
+h1,h2,h3{font-family:'Bricolage Grotesque',Figtree,sans-serif;margin:0}
+button,select,input{font:inherit;color:inherit}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{background:none;border:0;padding:7px 12px;cursor:pointer;color:var(--mut);font-weight:600}
+.seg button.on{background:var(--acc);color:#0e1210}
+.seg button:focus-visible,.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.field{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mut{color:var(--mut);font-size:13px}
+.big{font:800 34px/1 'Bricolage Grotesque',sans-serif}
+.tag{font-size:12px;border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--mut)}
+.btn{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:600}
+.btn.pri{background:var(--acc);color:#0e1210;border-color:var(--acc)}
+.pips{display:flex;gap:3px;align-items:flex-end;height:26px}
+.pips i{flex:1;border-radius:2px;min-width:3px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+.modal.open{display:flex}
+.sheet{background:var(--card);border:1px solid var(--line);border-radius:16px;max-width:680px;width:100%;max-height:92vh;overflow:auto;padding:20px}
+.chart{height:260px;margin:12px 0}
+.why{margin:0;padding:0;list-style:none;display:grid;gap:5px;font-size:13px}.why li::before{content:'• ';color:var(--acc)}.ctx{border:1px solid var(--line);border-radius:10px;padding:10px;display:grid;gap:4px;font-size:13px}.ctx b{color:var(--tx)}h4{margin:14px 0 6px;font:700 14px 'Bricolage Grotesque',sans-serif}
+.foot{color:var(--mut);font-size:12px;margin:28px 0 8px;border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row">
+    <div><h1 style="font-size:28px">Hitline</h1><div class="mut">See how often a prop line actually hits, and what the odds are charging for it.</div></div>
+    <div class="mut" id="upd" style="text-align:right"></div>
+  </div>
+
+  <div class="bar">
+    <div class="seg" id="tabs" role="tablist" aria-label="View"></div>
+    <div class="seg" id="sports" aria-label="Sport"></div>
+  </div>
+  <div class="bar">
+    <div class="seg" id="splits" aria-label="Split"></div>
+    <label><span class="mut">Min hit </span><select id="minHit" class="field"><option value="0">Any</option><option value="60">60%+</option><option value="80">80%+</option><option value="100">100%</option></select></label>
+    <label><span class="mut">Sort </span><select id="sort" class="field"><option value="hit">Hit rate</option><option value="edge">Edge</option><option value="odds">Best odds</option></select></label>
+    <input id="q" class="field" style="flex:1;min-width:180px" placeholder="Search player, team or market" aria-label="Search">
+  </div>
+  <div id="banner" class="mut" style="margin:6px 0 14px"></div>
+  <div id="grid" class="grid"></div>
+
+  <div class="foot">Hit rates describe past games and do not predict results. Stats come from the NHL and nflverse, lines from The Odds API and injuries from ESPN, so they can lag official team reports. 19+ in Ontario. If gambling stops being fun, ConnexOntario offers free support at 1-866-531-2600.</div>
+</div>
+
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="sheet">
+    <div class="row"><div id="mHead"></div><button class="btn" id="mClose" aria-label="Close">Close</button></div>
+    <div class="row" style="margin-top:12px">
+      <div class="row" style="gap:10px"><span class="mut">Test line</span>
+        <button class="btn" id="dn" aria-label="Lower line">−</button><b id="lineVal" style="min-width:40px;text-align:center"></b><button class="btn" id="up" aria-label="Raise line">+</button></div>
+      <b id="mRate"></b>
+    </div>
+    <div class="chart"><canvas id="chart" aria-label="Game log chart"></canvas></div>
+    <h4>Why this prop looks good (or not)</h4><ul class="why" id="mWhy"></ul>
+    <h4>Matchup and news</h4><div class="ctx" id="mCtx"></div>
+    <h4>Lines by book</h4><div class="ctx" id="mBooks"></div>
+    <div class="row" style="margin-top:14px"><span class="mut" id="mStats"></span><button class="btn pri" id="mSave"></button></div>
+  </div>
+</div>
+
+<script>
+const SPORTS={nhl:'NHL',nfl:'NFL'};
+const SPLITS=[['l5','L5'],['l10','L10'],['l20','L20'],['home','Home'],['away','Away']];
+const TABS=[['cheat','Cheatsheet'],['all','All props'],['slip','My slip']];
+let DB=[],ERR='';
+const fmtTime=iso=>new Date(iso).toLocaleString([],{weekday:"short",hour:"numeric",minute:"2-digit"});
+
+function why(p,split,line){
+  const st=stats(p,split,line),g=st.gs,out=[];
+  if(!st.n)return out;
+  const av=z=>z.reduce((t,x)=>t+x.v,0)/(z.length||1);
+  let streak=0;for(const x of p.games){if(x.v>line)streak++;else break}
+  out.push(`Cleared ${line} in ${st.hits} of ${st.n} games${streak>=3?', including the last '+streak+' straight':''}.`);
+  const cu=st.avg-line;
+  out.push(`Averages ${st.avg.toFixed(1)}, ${Math.abs(cu).toFixed(1)} ${cu>=0?'above':'below'} the line.`);
+  const mn=Math.min(...g.map(x=>x.v));
+  out.push(mn>line?`Floor is ${mn}: even the worst game cleared the line.`:`Lowest game was ${mn}, so a miss is realistic.`);
+  const h=av(p.games.filter(x=>x.home)),a=av(p.games.filter(x=>!x.home));
+  out.push(`Home average ${h.toFixed(1)} vs away ${a.toFixed(1)}.`);
+  const l5=av(p.games.slice(0,5)),l20=av(p.games);
+  out.push(l5>=l20*1.05?`Trending up: L5 average ${l5.toFixed(1)} vs L20 ${l20.toFixed(1)}.`:l5<=l20*.95?`Cooling off: L5 average ${l5.toFixed(1)} vs L20 ${l20.toFixed(1)}.`:`Steady: L5 average ${l5.toFixed(1)} vs L20 ${l20.toFixed(1)}.`);
+  out.push(st.edge>=0?`Hit rate beats the ${implied(p.odds).toFixed(1)}% the odds imply by ${st.edge.toFixed(1)} points.`:`Odds already price this higher than the hit rate (${implied(p.odds).toFixed(1)}% implied), so there is no edge.`);
+  return out;
+}
+
+const S={sport:'nhl',tab:'cheat',split:'l5',minHit:0,sort:'hit',q:'',slip:[],modal:null,mline:0};
+try{S.slip=JSON.parse(localStorage.getItem('hitline-slip')||'[]')}catch(e){}
+const saveSlip=()=>{try{localStorage.setItem('hitline-slip',JSON.stringify(S.slip))}catch(e){}};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtOdds=o=>o>0?'+'+o:String(o);
+const implied=o=>o<0?-o/(-o+100)*100:100/(o+100)*100;
+const rateColor=p=>p===100?'var(--hit)':p>=70?'var(--mid)':'var(--miss)';
+
+function slice(p,split){
+  const g=p.games;
+  if(split==='home')return g.filter(x=>x.home===true);
+  if(split==='away')return g.filter(x=>x.home===false);
+  return g.slice(0,{l5:5,l10:10,l20:20}[split]);
+}
+function stats(p,split,line){
+  const gs=slice(p,split),hits=gs.filter(x=>x.v>line).length;
+  const pct=gs.length?Math.round(hits/gs.length*100):0;
+  return{gs,hits,n:gs.length,pct,avg:gs.length?gs.reduce((a,x)=>a+x.v,0)/gs.length:0,edge:pct-implied(p.odds)};
+}
+
+function renderControls(){
+  const seg=(el,items,cur,fn)=>{$(el).innerHTML=items.map(([k,l])=>`<button class="${k===cur?'on':''}" data-k="${k}">${l}${k==='slip'&&S.slip.length?' ('+S.slip.length+')':''}</button>`).join('');
+    $(el).querySelectorAll('button').forEach(b=>b.onclick=()=>{fn(b.dataset.k);render()})};
+  seg('tabs',TABS,S.tab,k=>S.tab=k);
+  seg('sports',Object.entries(SPORTS),S.sport,k=>S.sport=k);
+  seg('splits',SPLITS,S.split,k=>S.split=k);
+}
+
+function render(){
+  renderControls();
+  if(!DB.length){$('banner').textContent='';$('grid').innerHTML='<div class="card" style="grid-column:1/-1">'+esc(ERR||'Loading props...')+'</div>';return}
+  const q=S.q.toLowerCase();
+  let list=DB.filter(p=>{
+    if(S.tab==='slip'){if(!S.slip.includes(p.id))return false}
+    else if(p.sport!==S.sport)return false;
+    const st=stats(p,S.split,p.line);
+    if(!st.n)return false;
+    if(S.tab==='cheat'&&st.pct<100)return false;
+    if(st.pct<S.minHit)return false;
+    return !q||(p.player+' '+p.team+' '+p.market).toLowerCase().includes(q);
+  }).map(p=>({p,st:stats(p,S.split,p.line)}));
+  const dec=o=>o>0?1+o/100:1+100/-o;
+  list.sort((a,b)=>S.sort==='edge'?b.st.edge-a.st.edge:S.sort==='odds'?dec(b.p.odds)-dec(a.p.odds):b.st.pct-a.st.pct||b.st.n-a.st.n);
+  const label=SPLITS.find(s=>s[0]===S.split)[1];
+  $('banner').textContent=S.tab==='cheat'?`${list.length} props that cleared the line in every ${label} game.`:S.tab==='slip'?`${list.length} saved ${list.length===1?'prop':'props'} across all sports (${label} split).`:`${list.length} props, ${label} split.`;
+  if(!list.length){
+    $('grid').innerHTML=`<div class="card" style="grid-column:1/-1;text-align:center">${S.tab==='slip'?'Your slip is empty. Tap Save on any prop to add it.':'No props match these filters. Lower the minimum hit rate or change the split.'}</div>`;return;
+  }
+  $('grid').innerHTML=list.map(({p,st})=>{
+    const saved=S.slip.includes(p.id);
+    const pips=st.gs.slice().reverse().map(x=>`<i style="height:${Math.max(18,Math.min(100,x.v/Math.max(...st.gs.map(g=>g.v),p.line)*100))}%;background:${x.v>p.line?'var(--hit)':'var(--miss)'}"></i>`).join('');
+    return `<article class="card">
+      <div class="row"><div><h3 style="font-size:18px">${esc(p.player)}</h3><div class="mut">${esc(p.team)}</div></div>
+        <button class="btn" data-save="${p.id}" aria-pressed="${saved}" aria-label="${saved?'Remove from':'Save to'} slip">${saved?'Saved':'Save'}</button></div>
+      <div class="row" style="align-items:flex-end"><div><div class="big" style="color:${rateColor(st.pct)}">${st.pct}%</div><div class="mut">${st.hits}/${st.n} games over</div></div>
+        <div style="text-align:right"><b>Over ${p.line}</b><div class="mut">${esc(p.market)}</div></div></div>
+      <div class="pips" aria-hidden="true">${pips}</div>
+      <div class="row mut"><span>Odds <b style="color:var(--tx)">${fmtOdds(p.odds)}</b> (${implied(p.odds).toFixed(1)}% implied)</span>
+        <span class="tag" style="color:${st.edge>=0?'var(--hit)':'var(--miss)'}">Edge ${st.edge>=0?'+':''}${st.edge.toFixed(1)}</span></div>
+      <ul class="why">${why(p,S.split,p.line).slice(0,3).map(t=>'<li>'+esc(t)+'</li>').join('')}</ul>
+      <div class="mut">Next: ${p.home?'vs':'@'} ${esc(p.opp)}, ${esc(fmtTime(p.start))}.${p.injury.self?' '+esc(p.player)+': '+esc(p.injury.self):''}</div>
+      <button class="btn" data-open="${p.id}">Open chart</button></article>`}).join('');
+  $('grid').querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>{toggle(b.dataset.save);render()});
+  $('grid').querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openModal(b.dataset.open));
+}
+
+function toggle(id){
+  const i=S.slip.indexOf(id);i>-1?S.slip.splice(i,1):S.slip.push(id);saveSlip();
+}
+
+let chart=null,lastFocus=null;
+function openModal(id){
+  S.modal=DB.find(p=>p.id===id);S.mline=S.modal.line;lastFocus=document.activeElement;
+  $('mHead').innerHTML=`<h2 id="mTitle" style="font-size:22px">${esc(S.modal.player)}</h2><div class="mut">${esc(S.modal.team)} · Over ${S.modal.line} ${esc(S.modal.market.toLowerCase())} (${fmtOdds(S.modal.odds)})</div>`;
+  $('modal').classList.add('open');drawModal();$('mClose').focus();
+}
+function closeModal(){
+  $('modal').classList.remove('open');S.modal=null;if(lastFocus)lastFocus.focus();
+}
+function drawModal(){
+  const p=S.modal,line=S.mline,st=stats(p,S.split,line);
+  const gs=st.gs.slice().reverse(); // oldest to newest, left to right
+  $('lineVal').textContent=line;
+  $('mRate').textContent=`${st.hits}/${st.n} over (${st.pct}%)`;$('mRate').style.color=rateColor(st.pct);
+  $('mStats').textContent=`Average ${st.avg.toFixed(1)} · Implied ${implied(p.odds).toFixed(1)}% · Edge ${st.edge>=0?'+':''}${st.edge.toFixed(1)}`;
+  $('mWhy').innerHTML=why(p,S.split,line).map(t=>'<li>'+esc(t)+'</li>').join('');
+  $('mCtx').innerHTML=`<div><b>Next game:</b> ${p.home?'vs':'@'} ${esc(p.opp)}, ${esc(fmtTime(p.start))}</div><div><b>${esc(p.player)}:</b> ${esc(p.injury.self||'No injury listed')}</div><div><b>${esc(p.team)} out:</b> ${esc(p.injury.team.join(', ')||'None listed')}</div><div><b>${esc(p.opp)} out:</b> ${esc(p.injury.opp.join(', ')||'None listed')}</div>`;
+  $('mBooks').innerHTML=p.books.slice(0,8).map(b=>`<div><b>${esc(b.book)}:</b> Over ${b.line} (${fmtOdds(b.odds)})</div>`).join('');
+  const saved=S.slip.includes(p.id);$('mSave').textContent=saved?'Remove from slip':'Add to slip';
+  const css=getComputedStyle(document.documentElement),c=n=>css.getPropertyValue(n).trim();
+  if(chart)chart.destroy();
+  chart=new Chart($('chart').getContext('2d'),{data:{
+    labels:gs.map(x=>`${x.home?'vs':'@'} ${x.opp} ${x.date}`),
+    datasets:[
+      {type:'bar',data:gs.map(x=>x.v),backgroundColor:gs.map(x=>x.v>line?c('--hit'):c('--miss')),borderRadius:5},
+      {type:'line',label:'Line',data:gs.map(()=>line),borderColor:c('--tx'),borderDash:[6,4],pointRadius:0,borderWidth:2},
+      {type:'line',label:'Average',data:gs.map(()=>st.avg),borderColor:c('--mid'),pointRadius:0,borderWidth:1.5}]},
+   options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:c('--mut'),filter:i=>i.datasetIndex>0}}},
+    scales:{x:{ticks:{color:c('--mut'),maxRotation:60,font:{size:10}},grid:{display:false}},y:{beginAtZero:true,ticks:{color:c('--mut')},grid:{color:c('--line')}}}}});
+}
+$('up').onclick=()=>{S.mline+=.5;drawModal()};
+$('dn').onclick=()=>{S.mline=Math.max(.5,S.mline-.5);drawModal()};
+$('mSave').onclick=()=>{toggle(S.modal.id);drawModal();render()};
+$('mClose').onclick=closeModal;
+$('modal').onclick=e=>{if(e.target===$('modal'))closeModal()};
+document.addEventListener('keydown',e=>{
+  if(!S.modal)return;
+  if(e.key==='Escape')closeModal();
+  if(e.key==='Tab'){ // keep focus inside the dialog
+    const f=[...$('modal').querySelectorAll('button')];const i=f.indexOf(document.activeElement);
+    if(e.shiftKey&&i<=0){e.preventDefault();f[f.length-1].focus()}
+    else if(!e.shiftKey&&i===f.length-1){e.preventDefault();f[0].focus()}
+  }
+});
+$('minHit').onchange=e=>{S.minHit=+e.target.value;render()};
+$('sort').onchange=e=>{S.sort=e.target.value;render()};
+$('q').oninput=e=>{S.q=e.target.value;render()};
+async function load(){
+  renderControls();
+  $('grid').innerHTML='<div class="card" style="grid-column:1/-1">Loading props...</div>';
+  try{
+    const r=await fetch('props.json',{cache:'no-store'});
+    if(!r.ok)throw new Error('Data file not found yet. Run the Build data and deploy workflow once.');
+    const d=await r.json();
+    if(!d.props||!d.props.length)throw new Error('No props available right now. '+(d.errors||[]).join(' '));
+    DB=d.props;
+    $('upd').textContent='Updated '+new Date(d.updated).toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+    if(!DB.some(p=>p.sport===S.sport))S.sport=DB[0].sport;
+  }catch(e){ERR=e.message;render();return}
+  render();
+}
+load();
+</script>
+</body>
+</html>
