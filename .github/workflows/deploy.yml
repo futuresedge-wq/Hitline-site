@@ -29,7 +29,7 @@ jobs:
           SPORTS: nhl
           NHL_ODDS_BASE_URL: https://api.prop-line.com/v1
           NHL_ODDS_KEY: ${{ secrets.NHL_ODDS_KEY }}
-          MARKETS: player_goals,player_shots_on_goal,player_blocked_shots
+          MARKETS: player_goals,player_goals_2plus,player_shots_on_goal,player_blocked_shots,player_points_1plus,player_points_2plus,player_points_3plus,goalie_saves
           BOOKS: draftkings,fanduel,betmgm,betrivers,hardrock,pinnacle,betway
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
