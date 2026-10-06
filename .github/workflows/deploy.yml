@@ -32,14 +32,16 @@ jobs:
       - name: Build props data
         run: node scripts/build-data.mjs
         env:
-          SPORTS: nhl,nfl
+          SPORTS: nhl,nfl,mlb
           BUILD_MINUTES: 15
           NHL_ODDS_BASE_URL: https://api.prop-line.com/v1
           NHL_ODDS_KEY: ${{ secrets.NHL_ODDS_KEY }}
           NFL_ODDS_BASE_URL: https://api.prop-line.com/v1
           NFL_ODDS_KEY: ${{ secrets.NHL_ODDS_KEY }}
           NFL_HORIZON_HOURS: 96
-          MARKETS: player_goals,player_goals_2plus,player_shots_on_goal,player_blocked_shots,player_points_1plus,player_points_2plus,player_points_3plus,goalie_saves,player_pass_yds,player_pass_tds,player_rush_yds,player_reception_yds,player_receptions,player_anytime_td,player_2plus_td
+          MLB_ODDS_BASE_URL: https://api.prop-line.com/v1
+          MLB_ODDS_KEY: ${{ secrets.NHL_ODDS_KEY }}
+          MARKETS: player_goals,player_goals_2plus,player_shots_on_goal,player_blocked_shots,player_points_1plus,player_points_2plus,player_points_3plus,goalie_saves,player_pass_yds,player_pass_tds,player_rush_yds,player_reception_yds,player_receptions,player_anytime_td,player_2plus_td,batter_hits,batter_total_bases,batter_home_runs,batter_rbis,batter_runs_scored,batter_hits_runs_rbis,pitcher_strikeouts,pitcher_outs
           BOOKS: draftkings,fanduel,betmgm,betrivers,hardrock,pinnacle,betway
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
