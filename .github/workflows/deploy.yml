@@ -15,6 +15,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -23,13 +24,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: nhl-logs-${{ github.run_id }}
+          restore-keys: nhl-logs-
       - name: Build props data
         run: node scripts/build-data.mjs
         env:
-          SPORTS: nhl
+          SPORTS: nhl,nfl
+          BUILD_MINUTES: 15
           NHL_ODDS_BASE_URL: https://api.prop-line.com/v1
           NHL_ODDS_KEY: ${{ secrets.NHL_ODDS_KEY }}
-          MARKETS: player_goals,player_goals_2plus,player_shots_on_goal,player_blocked_shots,player_points_1plus,player_points_2plus,player_points_3plus,goalie_saves
+          NFL_ODDS_BASE_URL: https://api.prop-line.com/v1
+          NFL_ODDS_KEY: ${{ secrets.NHL_ODDS_KEY }}
+          NFL_HORIZON_HOURS: 96
+          MARKETS: player_goals,player_goals_2plus,player_shots_on_goal,player_blocked_shots,player_points_1plus,player_points_2plus,player_points_3plus,goalie_saves,player_pass_yds,player_pass_tds,player_rush_yds,player_reception_yds,player_receptions,player_anytime_td,player_2plus_td
           BOOKS: draftkings,fanduel,betmgm,betrivers,hardrock,pinnacle,betway
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
