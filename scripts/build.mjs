@@ -12,11 +12,16 @@ export function saveCache(path) { try { mkdirSync(dirname(path), { recursive: tr
 const ODDS = 'https://api.the-odds-api.com/v4';
 const NHLAPI = 'https://api-web.nhle.com/v1';
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
+const MLBAPI = 'https://statsapi.mlb.com/api/v1';
 const MARKETS = {
   nhl: { key: 'icehockey_nhl', espn: 'hockey/nhl', list: {
     player_shots_on_goal: ['Shots on goal', 'shots'], player_points: ['Points', 'points'], player_assists: ['Assists', 'assists'],
     player_goals: ['Goals', 'goals'], player_power_play_points: ['Power play points', 'powerPlayPoints'], player_blocked_shots: ['Blocked shots', 'blockedShots'],
     player_goals_2plus: ['Goals', 'goals'], player_points_1plus: ['Points', 'points'], player_points_2plus: ['Points', 'points'], player_points_3plus: ['Points', 'points'], goalie_saves: ['Saves', 'saves'] } },
+  mlb: { key: 'baseball_mlb', espn: 'baseball/mlb', list: {
+    batter_hits: ['Hits', 'hits', 'hitting'], batter_total_bases: ['Total bases', 'totalBases', 'hitting'], batter_home_runs: ['Home runs', 'homeRuns', 'hitting'],
+    batter_rbis: ['RBIs', 'rbi', 'hitting'], batter_runs_scored: ['Runs', 'runs', 'hitting'], batter_hits_runs_rbis: ['Hits + runs + RBIs', 'hrr', 'hitting'],
+    pitcher_strikeouts: ['Pitcher strikeouts', 'strikeOuts', 'pitching'], pitcher_outs: ['Pitcher outs', 'outs', 'pitching'] } },
   nfl: { key: 'americanfootball_nfl', espn: 'football/nfl', list: {
     player_rush_yds: ['Rushing yards', 'rushing_yards'], player_reception_yds: ['Receiving yards', 'receiving_yards'], player_receptions: ['Receptions', 'receptions'],
     player_pass_yds: ['Passing yards', 'passing_yards'], player_rush_attempts: ['Rush attempts', 'carries'],
@@ -30,7 +35,7 @@ const lev = (a, b) => {
   return d[a.length][b.length];
 };
 const DEBUG = {}; // shown in /api/props to help diagnose missing games
-const ANYTIME = new Set(['player_goals', 'player_anytime_td']); // anytime-scorer prices are over 0.5
+const ANYTIME = new Set(['player_goals', 'player_anytime_td', 'batter_home_runs']); // anytime-scorer prices are over 0.5
 const ab = (t) => (t === 'LAR' ? 'LA' : t);
 
 const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/-/g, ' ').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim().replace(/ (jr|sr|ii|iii|iv)$/, '');
@@ -226,6 +231,71 @@ async function nhl(errors) {
   return warn('nhl', raw, res.filter(Boolean), errors);
 }
 
+async function mlb(errors) {
+  const cfg = MARKETS.mlb, raw = await oddsProps(cfg, 'mlb');
+  if (!raw.length) return [];
+  const tl = (await getJson(`${MLBAPI}/teams?sportId=1`)).teams;
+  const byId = new Map(tl.map((t) => [t.id, t]));
+  const findTeam = (full) => { const n = norm(full); return tl.find((t) => norm(t.name) === n) || tl.find((t) => n.endsWith(norm(t.teamName))); };
+  const need = new Map(); raw.forEach((r) => [r.event.home_team, r.event.away_team].forEach((t) => { const x = findTeam(t); if (x) need.set(x.id, x); }));
+  const rosters = {};
+  await pool([...need.keys()], 6, async (id) => { const d = await getJson(`${MLBAPI}/teams/${id}/roster?rosterType=active`); rosters[id] = new Map((d.roster || []).map((p) => [norm(p.person.fullName), p.person.id])); });
+  const injMap = await injuries(cfg.espn);
+  const now = new Date(), y = now.getMonth() >= 1 ? now.getFullYear() : now.getFullYear() - 1, seasons = [y, y - 1];
+  const cache = new Map();
+  const logs = (id, group) => { const ck = `${id}:${group}`; if (!cache.has(ck)) cache.set(ck, (async () => {
+    let all = [];
+    for (const se of seasons) {
+      const k = `mlb:${id}:${group}:${se}`, c = LOGS[k], stale = se === seasons[0] && (!c || Date.now() - c.t > 12 * 36e5);
+      let rows = c && !stale ? c.rows : null;
+      if (!rows && Date.now() - START > budgetMs()) { DEBUG.timeBudgetHit = true; rows = c ? c.rows : []; }
+      if (!rows) {
+        try {
+          const d = await getJson(`${MLBAPI}/people/${id}/stats?stats=gameLog&group=${group}&season=${se}&gameType=R`);
+          rows = ((d.stats?.[0]?.splits) || []).map((x) => ({ date: x.date, home: x.isHome, oppId: x.opponent?.id, st: x.stat || {} }))
+            .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 25)
+            .map((x) => ({ date: x.date, home: x.home, oppId: x.oppId, hits: x.st.hits, totalBases: x.st.totalBases, homeRuns: x.st.homeRuns, rbi: x.st.rbi, runs: x.st.runs, strikeOuts: x.st.strikeOuts, ip: x.st.inningsPitched, gs: x.st.gamesStarted }));
+          LOGS[k] = { t: Date.now(), rows };
+          if (++FETCHED % 25 === 0) console.log(`mlb: fetched ${FETCHED} game logs, ${Math.round((Date.now() - START) / 1000)}s elapsed`);
+        } catch (e) { const L = (DEBUG.logErrors = DEBUG.logErrors || []); if (L.length < 10) L.push(`mlb ${id} ${se}: ${e.message}`); rows = c ? c.rows : []; }
+      }
+      all = all.concat(rows);
+      if (all.length >= 20) break;
+    }
+    return all.sort((a, b) => b.date.localeCompare(a.date));
+  })()); return cache.get(ck); };
+  const outsOf = (ip) => { if (ip == null) return null; const [w, f = '0'] = String(ip).split('.'); return Number(w) * 3 + Number(f); };
+  const drops = { noRoster: [], shortLog: [] };
+  const findId = (m, n) => {
+    if (!m) return null;
+    if (m.has(n)) return m.get(n);
+    const [f, ...rest] = n.split(' '), l = rest.join(' ');
+    const c = [...m].filter(([rn]) => { const [rf, ...rr] = rn.split(' '); return rr.join(' ') === l && rf[0] === f[0]; });
+    if (c.length === 1) return c[0][1];
+    const near = [...m].filter(([rn]) => { const [rf, ...rr] = rn.split(' '); return rf[0] === f[0] && lev(rr.join(' '), l) <= 1; });
+    return near.length === 1 ? near[0][1] : null;
+  };
+  const res = await pool(raw, 8, async (r) => {
+    const e = r.event, ht = findTeam(e.home_team), at = findTeam(e.away_team), n = norm(r.player);
+    if (!ht || !at) { drops.noRoster.push(`${r.player} (team?)`); return null; }
+    const hid = findId(rosters[ht.id], n), aid = findId(rosters[at.id], n), side = hid ? 'home' : aid ? 'away' : null;
+    if (!side) { drops.noRoster.push(r.player); return null; }
+    const [, stat, group] = cfg.list[r.mkey], pid = side === 'home' ? hid : aid;
+    let rowsL = await logs(pid, group);
+    if (group === 'pitching') rowsL = rowsL.filter((x) => x.gs === undefined || x.gs === 1);
+    const g = [];
+    for (const x of rowsL.slice(0, 20)) {
+      const v = stat === 'hrr' ? (x.hits == null || x.runs == null || x.rbi == null ? null : x.hits + x.runs + x.rbi) : stat === 'outs' ? outsOf(x.ip) : x[stat];
+      if (v != null) g.push({ v, opp: byId.get(x.oppId)?.abbreviation || '?', home: !!x.home, date: md(x.date) });
+    }
+    if (g.length < 5) { drops.shortLog.push(r.player); return null; }
+    const mine = side === 'home' ? ht : at, theirs = side === 'home' ? at : ht;
+    return assemble('mlb', r, g, mine.abbreviation, theirs.abbreviation, side === 'home', injMap, mine.name, theirs.name);
+  });
+  DEBUG.mlbDropped = { noRoster: drops.noRoster.slice(0, 15), shortLog: drops.shortLog.slice(0, 15) };
+  return warn('mlb', raw, res.filter(Boolean), errors);
+}
+
 async function nfl(errors) {
   const cfg = MARKETS.nfl, raw = await oddsProps(cfg, 'nfl');
   if (!raw.length) return [];
@@ -270,7 +340,7 @@ async function nfl(errors) {
 export async function build() {
   START = Date.now();
   const out = { updated: new Date().toISOString(), props: [], errors: [], debug: DEBUG };
-  for (const [sport, fn] of [['nhl', nhl], ['nfl', nfl]].filter(([sp]) => (process.env.SPORTS || 'nhl,nfl').includes(sp))) {
+  for (const [sport, fn] of [['nhl', nhl], ['nfl', nfl], ['mlb', mlb]].filter(([sp]) => (process.env.SPORTS || 'nhl,nfl,mlb').includes(sp))) {
     try { out.props.push(...(await fn(out.errors))); } catch (e) { out.errors.push(`${sport}: ${e.message}`); }
   }
   return out;
