@@ -7,6 +7,7 @@ const LOGS = {};
 let START = Date.now();
 const budgetMs = () => Number(process.env.BUILD_MINUTES || 15) * 60000;
 let FETCHED = 0;
+let CUR = '';
 export function loadCache(path) { try { Object.assign(LOGS, JSON.parse(readFileSync(path, 'utf8'))); } catch {} }
 export function saveCache(path) { try { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, JSON.stringify(LOGS)); } catch {} }
 const ODDS = 'https://api.the-odds-api.com/v4';
@@ -41,13 +42,23 @@ const ab = (t) => (t === 'LAR' ? 'LA' : t);
 const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/-/g, ' ').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim().replace(/ (jr|sr|ii|iii|iv)$/, '');
 const md = (d) => { const [, m, x] = d.split('-'); return `${+m}/${+x}`; };
 const sleep = (ms) => new Promise((z) => setTimeout(z, ms));
+const GAP = { 'api-web.nhle.com': 250 }; // minimum ms between requests per host
+const lastHit = {};
+async function gap(url) {
+  let h; try { h = new URL(url).host; } catch { return; }
+  const min = GAP[h]; if (!min) return;
+  const wait = Math.max(0, (lastHit[h] || 0) + min - Date.now());
+  lastHit[h] = Date.now() + wait; // reserved synchronously, so concurrent callers queue up
+  if (wait) await sleep(wait);
+}
 // Retries rate-limited (429) requests, honouring Retry-After
 const getText = async (url) => {
   for (let i = 0; ; i++) {
     let r;
+    await gap(url);
     try { r = await fetch(url, { signal: AbortSignal.timeout(45000) }); }
     catch (e) { if (i < 3) { await sleep(1000 * (i + 1)); continue; } throw e; }
-    if ((r.status === 429 || r.status >= 500) && i < 3) { await sleep(Math.min(Number(r.headers.get('retry-after')) || 2 * (i + 1), 20) * 1000); continue; }
+    if ((r.status === 429 || r.status >= 500) && i < 5) { await sleep(Math.min(Number(r.headers.get('retry-after')) || 3 * (i + 1), 30) * 1000); continue; }
     if (!r.ok) throw new Error(`${r.status} ${url.replace(/apiKey=[^&]+/, 'apiKey=***')}`);
     return r.text();
   }
@@ -185,7 +196,7 @@ async function nhl(errors) {
     for (const se of seasons) {
       const k = `${id}:${se}`, c = LOGS[k], stale = se === seasons[0] && (!c || Date.now() - c.t > 12 * 36e5);
       let rows = c && !stale ? c.rows : null;
-      if (!rows && Date.now() - START > budgetMs()) { DEBUG.timeBudgetHit = true; rows = c ? c.rows : []; }
+      if (!rows && Date.now() - START > budgetMs()) { (DEBUG.budgetHit = DEBUG.budgetHit || {})[CUR] = true; rows = c ? c.rows : []; }
       if (!rows) {
         try {
           rows = ((await getJson(`${NHLAPI}/player/${id}/game-log/${se}/2`)).gameLog || [])
@@ -248,10 +259,11 @@ async function mlb(errors) {
     for (const se of seasons) {
       const k = `mlb:${id}:${group}:${se}`, c = LOGS[k], stale = se === seasons[0] && (!c || Date.now() - c.t > 12 * 36e5);
       let rows = c && !stale ? c.rows : null;
-      if (!rows && Date.now() - START > budgetMs()) { DEBUG.timeBudgetHit = true; rows = c ? c.rows : []; }
+      if (!rows && Date.now() - START > budgetMs()) { (DEBUG.budgetHit = DEBUG.budgetHit || {})[CUR] = true; rows = c ? c.rows : []; }
       if (!rows) {
         try {
           const d = await getJson(`${MLBAPI}/people/${id}/stats?stats=gameLog&group=${group}&season=${se}&gameType=R`);
+          if (!DEBUG.mlbLogSample) DEBUG.mlbLogSample = { id, group, season: se, splits: (d.stats?.[0]?.splits || []).length, firstDate: d.stats?.[0]?.splits?.[0]?.date || null };
           rows = ((d.stats?.[0]?.splits) || []).map((x) => ({ date: x.date, home: x.isHome, oppId: x.opponent?.id, st: x.stat || {} }))
             .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 25)
             .map((x) => ({ date: x.date, home: x.home, oppId: x.oppId, hits: x.st.hits, totalBases: x.st.totalBases, homeRuns: x.st.homeRuns, rbi: x.st.rbi, runs: x.st.runs, strikeOuts: x.st.strikeOuts, ip: x.st.inningsPitched, gs: x.st.gamesStarted }));
@@ -275,7 +287,7 @@ async function mlb(errors) {
     const near = [...m].filter(([rn]) => { const [rf, ...rr] = rn.split(' '); return rf[0] === f[0] && lev(rr.join(' '), l) <= 1; });
     return near.length === 1 ? near[0][1] : null;
   };
-  const res = await pool(raw, 8, async (r) => {
+  const res = await pool(raw, 8, async (r) => { try {
     const e = r.event, ht = findTeam(e.home_team), at = findTeam(e.away_team), n = norm(r.player);
     if (!ht || !at) { drops.noRoster.push(`${r.player} (team?)`); return null; }
     const hid = findId(rosters[ht.id], n), aid = findId(rosters[at.id], n), side = hid ? 'home' : aid ? 'away' : null;
@@ -291,7 +303,8 @@ async function mlb(errors) {
     if (g.length < 5) { drops.shortLog.push(r.player); return null; }
     const mine = side === 'home' ? ht : at, theirs = side === 'home' ? at : ht;
     return assemble('mlb', r, g, mine.abbreviation, theirs.abbreviation, side === 'home', injMap, mine.name, theirs.name);
-  });
+  } catch (err) { (DEBUG.mlbErrors = DEBUG.mlbErrors || []).length < 8 && DEBUG.mlbErrors.push(`${r.player}: ${err.message}`); return null; } });
+  DEBUG.mlbRosterSizes = Object.fromEntries([...need.values()].map((t) => [t.abbreviation, rosters[t.id]?.size ?? 0]));
   DEBUG.mlbDropped = { noRoster: drops.noRoster.slice(0, 15), shortLog: drops.shortLog.slice(0, 15) };
   return warn('mlb', raw, res.filter(Boolean), errors);
 }
@@ -341,6 +354,7 @@ export async function build() {
   START = Date.now();
   const out = { updated: new Date().toISOString(), props: [], errors: [], debug: DEBUG };
   for (const [sport, fn] of [['nhl', nhl], ['nfl', nfl], ['mlb', mlb]].filter(([sp]) => (process.env.SPORTS || 'nhl,nfl,mlb').includes(sp))) {
+    START = Date.now(); CUR = sport; // each sport gets its own time budget so one cannot starve the next
     try { out.props.push(...(await fn(out.errors))); } catch (e) { out.errors.push(`${sport}: ${e.message}`); }
   }
   return out;
