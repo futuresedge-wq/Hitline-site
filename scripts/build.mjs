@@ -33,7 +33,7 @@ const DEBUG = {}; // shown in /api/props to help diagnose missing games
 const ANYTIME = new Set(['player_goals', 'player_anytime_td']); // anytime-scorer prices are over 0.5
 const ab = (t) => (t === 'LAR' ? 'LA' : t);
 
-const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/-/g, ' ').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
+const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/-/g, ' ').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim().replace(/ (jr|sr|ii|iii|iv)$/, '');
 const md = (d) => { const [, m, x] = d.split('-'); return `${+m}/${+x}`; };
 const sleep = (ms) => new Promise((z) => setTimeout(z, ms));
 // Retries rate-limited (429) requests, honouring Retry-After
@@ -245,8 +245,15 @@ async function nfl(errors) {
   for (const v of by.values()) v.sort((a, b) => b.season - a.season || b.week - a.week);
   const injMap = await injuries(cfg.espn);
   const drops = { noStats: [], teamMismatch: [], shortLog: [] };
+  const nflFind = (n, h, a) => {
+    if (by.has(n)) return by.get(n);
+    const [f, ...rest] = n.split(' '), l = rest.join(' ');
+    const c = [...by].filter(([k, v]) => { const [kf, ...kr] = k.split(' '), tm = ab(v[0].team || v[0].recent_team); return (tm === h || tm === a) && kf[0] === f[0] && lev(kr.join(' '), l) <= 1; });
+    return c.length === 1 ? c[0][1] : null;
+  };
   const out = raw.map((r) => {
-    const e = r.event, h = ab(NFL[e.home_team]), a = ab(NFL[e.away_team]), list = by.get(norm(r.player));
+    if (/D\/ST/i.test(r.player)) return null; // team defences are not players
+    const e = r.event, h = ab(NFL[e.home_team]), a = ab(NFL[e.away_team]), list = nflFind(norm(r.player), h, a);
     if (!list || !h || !a) { drops.noStats.push(r.player); return null; }
     const t = ab(list[0].team || list[0].recent_team), stat = cfg.list[r.mkey][1];
     if (t !== h && t !== a) { drops.teamMismatch.push(r.player); return null; }
