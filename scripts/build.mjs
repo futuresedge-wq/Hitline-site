@@ -11,10 +11,16 @@ const MARKETS = {
     player_pass_yds: ['Passing yards', 'passing_yards'], player_rush_attempts: ['Rush attempts', 'carries'] } },
 };
 const NFL = { 'Arizona Cardinals':'ARI','Atlanta Falcons':'ATL','Baltimore Ravens':'BAL','Buffalo Bills':'BUF','Carolina Panthers':'CAR','Chicago Bears':'CHI','Cincinnati Bengals':'CIN','Cleveland Browns':'CLE','Dallas Cowboys':'DAL','Denver Broncos':'DEN','Detroit Lions':'DET','Green Bay Packers':'GB','Houston Texans':'HOU','Indianapolis Colts':'IND','Jacksonville Jaguars':'JAX','Kansas City Chiefs':'KC','Las Vegas Raiders':'LV','Los Angeles Chargers':'LAC','Los Angeles Rams':'LA','Miami Dolphins':'MIA','Minnesota Vikings':'MIN','New England Patriots':'NE','New Orleans Saints':'NO','New York Giants':'NYG','New York Jets':'NYJ','Philadelphia Eagles':'PHI','Pittsburgh Steelers':'PIT','San Francisco 49ers':'SF','Seattle Seahawks':'SEA','Tampa Bay Buccaneers':'TB','Tennessee Titans':'TEN','Washington Commanders':'WAS' };
+const lev = (a, b) => {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+};
 const DEBUG = {}; // shown in /api/props to help diagnose missing games
 const ab = (t) => (t === 'LAR' ? 'LA' : t);
 
-const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
+const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/-/g, ' ').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
 const md = (d) => { const [, m, x] = d.split('-'); return `${+m}/${+x}`; };
 const sleep = (ms) => new Promise((z) => setTimeout(z, ms));
 // Retries rate-limited (429) requests, honouring Retry-After
@@ -88,7 +94,7 @@ async function oddsProps(cfg, sport) {
       else if (m.key === 'player_goals' && x.point == null && !/^(under|no)$/i.test(x.name) && !/^\d+\+/.test(x.name)) {
         who = x.name === 'Yes' ? x.description : x.name; line = 0.5; // anytime goal scorer = over 0.5 goals
       } else continue;
-      const pname = String(who || '').replace(/\s*\([^)]*\)\s*$/, '').trim(); // some feeds append "(TEAM)"
+      const pname = String(who || '').replace(/\s*\([^)]*\)\s*$/, '').replace(/^([^,]+),\s*(.+)$/, '$2 $1').trim(); // some feeds append "(TEAM)"
       const k = `${norm(pname)}|${m.key}`;
       if (!map.has(k)) map.set(k, { player: pname, mkey: m.key, event: r.e, books: [] });
       map.get(k).books.push({ book: b.title, line, odds: x.price });
@@ -156,7 +162,10 @@ async function nhl(errors) {
     if (m.has(n)) return m.get(n);
     const [f, ...rest] = n.split(' '), l = rest.join(' ');
     const c = [...m].filter(([rn]) => { const [rf, ...rr] = rn.split(' '); return rr.join(' ') === l && rf[0] === f[0]; });
-    return c.length === 1 ? c[0][1] : null;
+    if (c.length === 1) return c[0][1];
+    // last resort: same first initial and a last name one typo away (e.g. Trochek vs Trocheck)
+    const near = [...m].filter(([rn]) => { const [rf, ...rr] = rn.split(' '); return rf[0] === f[0] && lev(rr.join(' '), l) <= 1; });
+    return near.length === 1 ? near[0][1] : null;
   };
   const res = await pool(raw, 4, async (r) => {
     const e = r.event, h = abbr(e.home_team), a = abbr(e.away_team), n = norm(r.player);
