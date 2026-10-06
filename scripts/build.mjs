@@ -5,7 +5,8 @@ const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
 const MARKETS = {
   nhl: { key: 'icehockey_nhl', espn: 'hockey/nhl', list: {
     player_shots_on_goal: ['Shots on goal', 'shots'], player_points: ['Points', 'points'], player_assists: ['Assists', 'assists'],
-    player_goals: ['Goals', 'goals'], player_power_play_points: ['Power play points', 'powerPlayPoints'], player_blocked_shots: ['Blocked shots', 'blockedShots'] } },
+    player_goals: ['Goals', 'goals'], player_power_play_points: ['Power play points', 'powerPlayPoints'], player_blocked_shots: ['Blocked shots', 'blockedShots'],
+    player_goals_2plus: ['Goals', 'goals'], player_points_1plus: ['Points', 'points'], player_points_2plus: ['Points', 'points'], player_points_3plus: ['Points', 'points'], goalie_saves: ['Saves', 'saves'] } },
   nfl: { key: 'americanfootball_nfl', espn: 'football/nfl', list: {
     player_rush_yds: ['Rushing yards', 'rushing_yards'], player_reception_yds: ['Receiving yards', 'receiving_yards'], player_receptions: ['Receptions', 'receptions'],
     player_pass_yds: ['Passing yards', 'passing_yards'], player_rush_attempts: ['Rush attempts', 'carries'] } },
@@ -90,7 +91,12 @@ async function oddsProps(cfg, sport) {
     for (const b of (r.o.bookmakers || []).filter(okBook)) for (const m of b.markets || []) for (const x of m.outcomes || []) {
       if (!cfg.list[m.key]) continue;
       let who = x.description, line = x.point;
-      if (x.name === 'Over' && x.point != null) { /* normal over/under */ }
+      const ms = /_(\d)plus$/.exec(m.key); // milestone market: 2plus = over 1.5
+      if (ms) {
+        if (/^(under|no)$/i.test(x.name)) continue;
+        who = /^(yes|over)$/i.test(x.name) || /^\d+\+/.test(x.name) ? x.description : x.name;
+        line = Number(ms[1]) - 0.5;
+      } else if (x.name === 'Over' && x.point != null) { /* normal over/under */ }
       else if (m.key === 'player_goals' && x.point == null && !/^(under|no)$/i.test(x.name) && !/^\d+\+/.test(x.name)) {
         who = x.name === 'Yes' ? x.description : x.name; line = 0.5; // anytime goal scorer = over 0.5 goals
       } else continue;
@@ -151,7 +157,7 @@ async function nhl(errors) {
   const abbr = (full) => teams.find((t) => full.endsWith(t.common))?.abbr;
   const need = new Set(); raw.forEach((r) => [r.event.home_team, r.event.away_team].forEach((t) => need.add(abbr(t)))); need.delete(undefined);
   const rosters = {};
-  await pool([...need], 6, async (a) => { const d = await getJson(`${NHLAPI}/roster/${a}/current`); rosters[a] = new Map([...d.forwards, ...d.defensemen].map((p) => [norm(`${p.firstName.default} ${p.lastName.default}`), p.id])); });
+  await pool([...need], 6, async (a) => { const d = await getJson(`${NHLAPI}/roster/${a}/current`); rosters[a] = new Map([...d.forwards, ...d.defensemen, ...(d.goalies || [])].map((p) => [norm(`${p.firstName.default} ${p.lastName.default}`), p.id])); });
   const injMap = await injuries(cfg.espn);
   const now = new Date(), y = now.getFullYear(), s = now.getMonth() >= 8 ? y : y - 1, seasons = [`${s}${s + 1}`, `${s - 1}${s}`];
   const cache = new Map();
@@ -173,9 +179,10 @@ async function nhl(errors) {
     if (!side) { drops.noRoster.push(r.player); return null; }
     const stat = cfg.list[r.mkey][1];
     const pid = side === 'home' ? hid : aid;
-    const rowsL = (await logs(pid)).slice(0, 20), g = [];
+    const allRows = await logs(pid);
+    const rowsL = (stat === 'saves' ? allRows.filter((x) => x.gamesStarted === undefined || x.gamesStarted === 1) : allRows).slice(0, 20), g = [];
     for (const x of rowsL) {
-      const v = BOX.has(stat) ? await boxStat(x.gameId, pid, stat) : x[stat];
+      const v = BOX.has(stat) ? await boxStat(x.gameId, pid, stat) : stat === 'saves' ? (x.shotsAgainst != null && x.goalsAgainst != null ? x.shotsAgainst - x.goalsAgainst : null) : x[stat];
       if (v != null) g.push({ v, opp: x.opponentAbbrev, home: x.homeRoadFlag === 'H', date: md(x.gameDate) });
     }
     if (g.length < 5) { drops.shortLog.push(r.player); return null; }
