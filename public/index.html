@@ -16,57 +16,120 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;600;700&display=swap">
 <style>
-:root{--bg:#0e1210;--card:#161c18;--line:#26302a;--tx:#e8efe9;--mut:#8a9a8f;--acc:#c6f24e;--hit:#c6f24e;--miss:#ff6b57;--mid:#f2b84e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-:root[data-theme="light"]{--bg:#f4f6f1;--card:#fff;--line:#d9e0d5;--tx:#18211b;--mut:#5d6d62;--acc:#2f6b00;--hit:#2f6b00;--miss:#c4361f;--mid:#9a6a00}
-@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f6f1;--card:#fff;--line:#d9e0d5;--tx:#18211b;--mut:#5d6d62;--acc:#2f6b00;--hit:#2f6b00;--miss:#c4361f;--mid:#9a6a00}}
-*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+:root{--bg:#0e1210;--card:#161c18;--card2:#1c241f;--line:#26302a;--tx:#e8efe9;--mut:#8a9a8f;--acc:#c6f24e;--onacc:#0e1210;--hit:#c6f24e;--miss:#ff6b57;--mid:#f2b84e;--glass:rgba(14,18,16,.88);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root[data-theme="light"]{--bg:#f4f6f1;--card:#fff;--card2:#eef2ea;--line:#d9e0d5;--tx:#18211b;--mut:#5d6d62;--acc:#2f6b00;--onacc:#fff;--hit:#2f6b00;--miss:#c4361f;--mid:#9a6a00;--glass:rgba(244,246,241,.9)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f6f1;--card:#fff;--card2:#eef2ea;--line:#d9e0d5;--tx:#18211b;--mut:#5d6d62;--acc:#2f6b00;--onacc:#fff;--hit:#2f6b00;--miss:#c4361f;--mid:#9a6a00;--glass:rgba(244,246,241,.9)}}
+*{box-sizing:border-box}html{scroll-padding-top:150px}
 body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 Figtree,system-ui,sans-serif}
 h1,h2,h3{font-family:'Bricolage Grotesque',Figtree,sans-serif;margin:0}
 button,select,input{font:inherit;color:inherit}
 .wrap{max-width:1100px;margin:0 auto;padding:16px}
-.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
-.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.seg button{background:none;border:0;padding:7px 12px;cursor:pointer;color:var(--mut);font-weight:600}
-.seg button.on{background:var(--acc);color:#0e1210}
-.seg button:focus-visible,.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-.field{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
-.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
 .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .mut{color:var(--mut);font-size:13px}
-.big{font:800 34px/1 'Bricolage Grotesque',sans-serif}
 .tag{font-size:12px;border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--mut)}
-.btn{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:600}
-.btn.pri{background:var(--acc);color:#0e1210;border-color:var(--acc)}
-.pips{display:flex;gap:3px;align-items:flex-end;height:26px}
-.pips i{flex:1;border-radius:2px;min-width:3px}
+.btn{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:600;min-height:44px}
+.btn.pri{background:var(--acc);color:var(--onacc);border-color:var(--acc)}
+.field{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 10px;min-height:36px}
+.btn:focus-visible,.chip:focus-visible,.seg button:focus-visible,select:focus-visible,input:focus-visible,.star:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+
+/* header */
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.head h1{font-size:28px;display:flex;align-items:center;gap:10px}
+.head .sub{margin-top:2px}
+#upd{text-align:right;white-space:nowrap}
+#upd::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--hit);margin-right:6px;vertical-align:1px}
+
+/* top picks */
+#picksBox{margin:18px 0 6px}
+#picksBox[hidden]{display:none}
+.pk-head{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+.pk-head h2{font-size:20px}
+.picks{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;padding:2px 2px 10px;margin:0 -2px;scrollbar-width:thin}
+.pick{position:relative;flex:0 0 224px;scroll-snap-align:start;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.pick .nm{font:700 17px/1.2 'Bricolage Grotesque',sans-serif}
+.pick .pp{font-size:14px}
+.pick .mini{height:44px;margin:4px 0 2px}
+.pick .pf{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.pick .rate{font:800 30px/1 'Bricolage Grotesque',sans-serif}
+.pick .od{font-size:13px;text-align:right}
+
+/* sticky filters */
+.sticky{position:sticky;top:0;z-index:6;margin:0 -16px;padding:10px 16px 8px;background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line);display:grid;gap:8px}
+.fa{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fa .seg{flex:none}
+#q{flex:1;min-width:150px;min-height:40px}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+.seg button{background:none;border:0;padding:8px 14px;cursor:pointer;color:var(--mut);font-weight:600;white-space:nowrap;min-height:40px}
+.seg button.on{background:var(--acc);color:var(--onacc)}
+.chips{display:flex;gap:6px;align-items:center}
+.chip{flex:none;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:5px 13px;min-height:34px;cursor:pointer;color:var(--mut);font-weight:600;white-space:nowrap}
+.chip.on{background:var(--acc);border-color:var(--acc);color:var(--onacc)}
+.chips .sp{flex:none;width:1px;height:20px;background:var(--line);margin:0 4px}
+.chips label{flex:none;display:flex;align-items:center;gap:6px}
+
+/* list */
+#banner{margin:12px 0 10px}
+.list{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(440px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.prop{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 8px 8px 14px;display:grid;grid-template-columns:1fr 92px 56px;grid-template-areas:"info mini ring" "foot foot star";column-gap:12px;row-gap:2px;align-items:center}
+.prop .info{grid-area:info;min-width:0}
+.prop .mini{grid-area:mini;height:40px}
+.prop .ring{grid-area:ring;justify-self:center}
+.prop .foot2{grid-area:foot;display:flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline;font-size:13px;color:var(--mut)}
+.prop .star{grid-area:star;justify-self:center}
+.nm{font:700 17px/1.2 'Bricolage Grotesque',sans-serif;display:inline}
+.open{all:unset;cursor:pointer;font:700 17px/1.2 'Bricolage Grotesque',sans-serif;color:var(--tx)}
+.open::after{content:'';position:absolute;inset:0;border-radius:16px}
+.open:focus-visible::after{outline:2px solid var(--acc);outline-offset:2px}
+.pick .open::after{border-radius:16px}
+.inj{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mid);margin-left:6px;vertical-align:1px}
+.pp b{font-weight:700}
+.edge{font-weight:700;white-space:nowrap}
+.mini{display:block;width:100%}
+.mini .h{fill:var(--hit)}.mini .m{fill:var(--miss)}
+.mini .ln{stroke:var(--tx);stroke-width:1.5;stroke-dasharray:4 3;opacity:.85}
+.ring{--p:0;--c:var(--hit);width:54px;height:54px;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p)*1%),var(--line) 0);display:grid;place-items:center;position:relative;flex:none}
+.ring::before{content:'';position:absolute;inset:5px;border-radius:50%;background:var(--card)}
+.ring b{position:relative;font:800 14px 'Bricolage Grotesque',sans-serif}
+.star{position:relative;z-index:1;width:44px;height:44px;display:grid;place-items:center;background:none;border:0;border-radius:12px;cursor:pointer;color:var(--mut)}
+.star svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
+.star[aria-pressed="true"]{color:var(--mid)}
+.star[aria-pressed="true"] svg{fill:currentColor}
+
+/* skeleton */
+.sk{height:104px;border-radius:16px;border:1px solid var(--line);background:linear-gradient(100deg,var(--card) 30%,var(--card2) 50%,var(--card) 70%);background-size:300% 100%;animation:sh 1.4s linear infinite}
+@keyframes sh{from{background-position:100% 0}to{background-position:-100% 0}}
+
+/* modal */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
 .modal.open{display:flex}
+.modal.open .sheet{animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(28px);opacity:0}to{transform:none;opacity:1}}
 .sheet{background:var(--card);border:1px solid var(--line);border-radius:16px;max-width:680px;width:100%;max-height:92vh;overflow:auto;padding:20px}
 .chart{height:260px;margin:12px 0}
 .why{margin:0;padding:0;list-style:none;display:grid;gap:5px;font-size:13px}.why li::before{content:'• ';color:var(--acc)}.ctx{border:1px solid var(--line);border-radius:10px;padding:10px;display:grid;gap:4px;font-size:13px}.ctx b{color:var(--tx)}h4{margin:14px 0 6px;font:700 14px 'Bricolage Grotesque',sans-serif}
 .foot{color:var(--mut);font-size:12px;margin:28px 0 8px;border-top:1px solid var(--line);padding-top:14px}
 
-/* ---- phone layout ---- */
-.seg button,.btn,select.field,input.field{min-height:44px}
-.seg button{white-space:nowrap}
-.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-.scroll::-webkit-scrollbar{display:none}
+/* tabs: desktop in the filter bar, bottom bar on phones */
+#tabs button{min-height:40px}
+
 @media (max-width:640px){
   body{font-size:15px}
   .wrap{padding:12px 12px calc(76px + env(safe-area-inset-bottom,0px))}
-  h1{font-size:24px!important}
-  .bar{margin:10px 0;gap:8px}
-  #tabs{position:fixed;left:0;right:0;bottom:0;z-index:9;border-radius:0;border-width:1px 0 0;background:var(--card);padding-bottom:env(safe-area-inset-bottom,0px)}
-  #tabs button{flex:1;padding:12px 6px}
-  #sports{width:100%}#sports button{flex:1}
-  #splits{width:100%;overflow-x:auto}#splits button{flex:1;padding:7px 14px}
-  .bar label{flex:1 1 44%;display:flex;flex-direction:column;gap:2px}
-  .bar label select{width:100%}
-  #q{flex:1 1 100%!important;min-width:0!important}
-  .grid{grid-template-columns:1fr;gap:12px}
-  .card{padding:14px}
-  .big{font-size:38px}
+  .head h1{font-size:24px}
+  .head .sub{display:none}
+  .sticky{margin:0 -12px;padding:8px 12px 6px}
+  #tabs{position:fixed;left:0;right:0;bottom:0;z-index:9;border-radius:0;border-width:1px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
+  #tabs button{flex:1;padding:12px 6px;min-height:48px}
+  .fa{flex-wrap:nowrap}
+  #q{min-width:0}
+  #picksBox{margin-top:12px}
+  .pick{flex-basis:208px}
+  .list{grid-template-columns:1fr}
+  .prop{grid-template-columns:1fr 84px 52px;column-gap:10px}
+  .ring{width:50px;height:50px}
   .modal{align-items:flex-end;padding:0}
   .sheet{max-width:none;border-radius:18px 18px 0 0;max-height:94vh;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px))}
   .chart{height:230px}
@@ -74,29 +137,41 @@ button,select,input{font:inherit;color:inherit}
   .sheet #mSave{width:100%}
   .foot{margin-bottom:24px}
 }
-@media (hover:none){.btn:active,.seg button:active{opacity:.7}}
+@media (max-width:420px){.prop{grid-template-columns:1fr 76px 50px}}
+@media (hover:hover){.prop:hover,.pick:hover{border-color:var(--acc)}}
+@media (hover:none){.btn:active,.seg button:active,.chip:active{opacity:.7}}
+@media (prefers-reduced-motion:reduce){.sk{animation:none}.modal.open .sheet{animation:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="row">
-    <div><h1 style="font-size:28px;display:flex;align-items:center;gap:10px"><svg width="34" height="34" viewBox="0 0 1024 1024" aria-hidden="true" style="flex:none"><rect width="1024" height="1024" rx="230" fill="#0e1210"/><rect x="282" y="540" width="120" height="220" rx="30" fill="#ff6b57"/><rect x="452" y="400" width="120" height="360" rx="30" fill="#c6f24e"/><rect x="622" y="280" width="120" height="480" rx="30" fill="#c6f24e"/><rect x="282" y="720" width="120" height="40" fill="#ff6b57"/><rect x="452" y="720" width="120" height="40" fill="#c6f24e"/><rect x="622" y="720" width="120" height="40" fill="#c6f24e"/><path d="M225 460H800" stroke="#e8efe9" stroke-width="22" stroke-linecap="round" stroke-dasharray="56 34"/></svg>Hitline</h1><div class="mut">See how often a prop line actually hits, and what the odds are charging for it.</div></div>
-    <div class="mut" id="upd" style="text-align:right"></div>
+  <div class="head">
+    <div><h1><svg width="34" height="34" viewBox="0 0 1024 1024" aria-hidden="true" style="flex:none"><rect width="1024" height="1024" rx="230" fill="#0e1210"/><rect x="282" y="540" width="120" height="220" rx="30" fill="#ff6b57"/><rect x="452" y="400" width="120" height="360" rx="30" fill="#c6f24e"/><rect x="622" y="280" width="120" height="480" rx="30" fill="#c6f24e"/><rect x="282" y="720" width="120" height="40" fill="#ff6b57"/><rect x="452" y="720" width="120" height="40" fill="#c6f24e"/><rect x="622" y="720" width="120" height="40" fill="#c6f24e"/><path d="M225 460H800" stroke="#e8efe9" stroke-width="22" stroke-linecap="round" stroke-dasharray="56 34"/></svg>Hitline</h1><div class="mut sub">See how often a prop line actually hits, and what the odds are charging for it.</div></div>
+    <div class="mut" id="upd"></div>
   </div>
 
-  <div class="bar">
-    <div class="seg" id="tabs" role="tablist" aria-label="View"></div>
-    <div class="seg" id="sports" aria-label="Sport"></div>
+  <section id="picksBox" hidden aria-label="Top picks">
+    <div class="pk-head"><h2>Top picks</h2><span class="mut" id="pkNote"></span></div>
+    <div class="picks" id="picks"></div>
+  </section>
+
+  <div class="sticky">
+    <div class="fa">
+      <div class="seg" id="tabs" role="tablist" aria-label="View"></div>
+      <div class="seg" id="sports" aria-label="Sport"></div>
+      <input id="q" class="field" type="search" placeholder="Search player or team" aria-label="Search player or team">
+    </div>
+    <div class="chips scroll" id="mkts" aria-label="Market"></div>
+    <div class="chips scroll" aria-label="Sample and sorting">
+      <span class="chips" id="splits" aria-label="Sample"></span>
+      <span class="sp" aria-hidden="true"></span>
+      <label class="mut">Min hit <select id="minHit" class="field"><option value="0">Any</option><option value="60">60%+</option><option value="80">80%+</option><option value="100">100%</option></select></label>
+      <label class="mut">Sort <select id="sort" class="field"><option value="hit">Hit rate</option><option value="edge">Edge</option><option value="odds">Best odds</option></select></label>
+    </div>
   </div>
-  <div class="bar">
-    <div class="seg scroll" id="splits" aria-label="Split"></div>
-    <label><span class="mut">Market </span><select id="mkt" class="field" aria-label="Market"></select></label>
-    <label><span class="mut">Min hit </span><select id="minHit" class="field"><option value="0">Any</option><option value="60">60%+</option><option value="80">80%+</option><option value="100">100%</option></select></label>
-    <label><span class="mut">Sort </span><select id="sort" class="field"><option value="hit">Hit rate</option><option value="edge">Edge</option><option value="odds">Best odds</option></select></label>
-    <input id="q" class="field" style="flex:1;min-width:180px" placeholder="Search player, team or market" aria-label="Search">
-  </div>
-  <div id="banner" class="mut" style="margin:6px 0 14px"></div>
-  <div id="grid" class="grid"></div>
+
+  <div id="banner" class="mut"></div>
+  <div id="grid" class="list"></div>
 
   <div class="foot">Hit rates describe past games and do not predict results. Stats come from the NHL, nflverse and MLB, lines from PropLine and injuries from ESPN, so they can lag official team reports. 19+ in Ontario. If gambling stops being fun, ConnexOntario offers free support at 1-866-531-2600.</div>
 </div>
@@ -121,7 +196,7 @@ button,select,input{font:inherit;color:inherit}
 const SPORTS={nhl:'NHL',nfl:'NFL',mlb:'MLB'};
 const SPLITS=[['l5','L5'],['l10','L10'],['l20','L20'],['home','Home'],['away','Away']];
 const TABS=[['cheat','Cheatsheet'],['all','All props'],['slip','My slip']];
-let DB=[],ERR='';
+let DB=[],ERR='',UPDATED=null;
 const fmtTime=iso=>new Date(iso).toLocaleString([],{weekday:"short",hour:"numeric",minute:"2-digit"});
 
 function why(p,split,line){
@@ -144,12 +219,24 @@ function why(p,split,line){
 
 const S={market:'all',sport:'nhl',tab:'cheat',split:'l5',minHit:0,sort:'hit',q:'',slip:[],modal:null,mline:0};
 try{S.slip=JSON.parse(localStorage.getItem('hitline-slip')||'[]')}catch(e){}
+try{
+  const pr=JSON.parse(localStorage.getItem('hitline-prefs')||'{}');
+  if(SPORTS[pr.sport])S.sport=pr.sport;
+  if(TABS.some(t=>t[0]===pr.tab))S.tab=pr.tab;
+  if(SPLITS.some(t=>t[0]===pr.split))S.split=pr.split;
+  if([0,60,80,100].includes(pr.minHit))S.minHit=pr.minHit;
+  if(['hit','edge','odds'].includes(pr.sort))S.sort=pr.sort;
+  if(typeof pr.market==='string')S.market=pr.market;
+}catch(e){}
+const savePrefs=()=>{try{localStorage.setItem('hitline-prefs',JSON.stringify({sport:S.sport,tab:S.tab,split:S.split,minHit:S.minHit,sort:S.sort,market:S.market}))}catch(e){}};
 const saveSlip=()=>{try{localStorage.setItem('hitline-slip',JSON.stringify(S.slip))}catch(e){}};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtOdds=o=>o>0?'+'+o:String(o);
 const implied=o=>o<0?-o/(-o+100)*100:100/(o+100)*100;
 const rateColor=p=>p===100?'var(--hit)':p>=70?'var(--mid)':'var(--miss)';
+const dec=o=>o>0?1+o/100:1+100/-o;
+const sgn=n=>(n>=0?'+':'')+n.toFixed(1);
 
 function slice(p,split){
   const g=p.games;
@@ -163,20 +250,69 @@ function stats(p,split,line){
   return{gs,hits,n:gs.length,pct,avg:gs.length?gs.reduce((a,x)=>a+x.v,0)/gs.length:0,edge:pct-implied(p.odds)};
 }
 
+/* Bars are the games (oldest on the left). The dashed line is the prop line,
+   so a bar that pokes above it is a hit. Heights share one scale. */
+function mini(st,line){
+  const g=st.gs.slice().reverse(),n=g.length;
+  const mx=Math.max(...g.map(x=>x.v),line+.5,1),bw=100/n,gap=Math.min(1.6,bw*.28);
+  const bars=g.map((x,i)=>{const h=Math.max(x.v/mx*32,1.5);
+    return `<rect class="${x.v>line?'h':'m'}" x="${(i*bw+gap/2).toFixed(2)}" y="${(34-h).toFixed(2)}" width="${(bw-gap).toFixed(2)}" height="${h.toFixed(2)}"/>`}).join('');
+  const ly=(34-line/mx*32).toFixed(2);
+  return `<svg class="mini" viewBox="0 0 100 36" preserveAspectRatio="none" role="img" aria-label="Last ${n} games, ${st.hits} over ${line}">${bars}<line class="ln" x1="0" x2="100" y1="${ly}" y2="${ly}" vector-effect="non-scaling-stroke"/></svg>`;
+}
+const ring=pct=>`<div class="ring" style="--p:${pct};--c:${rateColor(pct)}" role="img" aria-label="${pct} percent hit rate"><b>${pct}%</b></div>`;
+const starSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.5l6-.8z"/></svg>';
+const matchup=p=>`${esc(p.team)} ${p.home?'vs':'@'} ${esc(p.opp)}`;
+
+function topPicks(){
+  const seen=new Set();
+  return DB.filter(p=>p.sport===S.sport).map(p=>({p,st:stats(p,S.split,p.line)}))
+    .filter(({st})=>st.n>=5&&st.pct>=80&&st.edge>0)
+    .sort((a,b)=>b.st.edge-a.st.edge||b.st.n-a.st.n)
+    .filter(({p})=>!seen.has(p.player)&&seen.add(p.player)).slice(0,8);
+}
+
 function renderControls(){
-  const seg=(el,items,cur,fn)=>{$(el).innerHTML=items.map(([k,l])=>`<button class="${k===cur?'on':''}" data-k="${k}">${l}${k==='slip'&&S.slip.length?' ('+S.slip.length+')':''}</button>`).join('');
+  const seg=(el,items,cur,fn,cls)=>{$(el).innerHTML=items.map(([k,l])=>`<button class="${cls||''}${k===cur?' on':''}" data-k="${esc(k)}"${cls?` aria-pressed="${k===cur}"`:''}>${esc(l)}${k==='slip'&&S.slip.length?' ('+S.slip.length+')':''}</button>`).join('');
     $(el).querySelectorAll('button').forEach(b=>b.onclick=()=>{fn(b.dataset.k);render()})};
   seg('tabs',TABS,S.tab,k=>S.tab=k);
   seg('sports',Object.entries(SPORTS),S.sport,k=>S.sport=k);
-  seg('splits',SPLITS,S.split,k=>S.split=k);
+  seg('splits',SPLITS,S.split,k=>S.split=k,'chip');
+}
+
+function bind(root){
+  root.querySelectorAll('[data-save]').forEach(b=>b.onclick=e=>{e.stopPropagation();toggle(b.dataset.save);render()});
+  root.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openModal(b.dataset.open));
 }
 
 function render(){
   renderControls();
-  if(!DB.length){$('banner').textContent='';$('grid').innerHTML='<div class="card" style="grid-column:1/-1">'+esc(ERR||'Loading props...')+'</div>';return}
+  savePrefs();
+  $('minHit').value=String(S.minHit);$('sort').value=S.sort;
+  if(!DB.length){
+    $('banner').textContent='';$('picksBox').hidden=true;$('mkts').innerHTML='';
+    $('grid').innerHTML=ERR?'<div class="card" style="grid-column:1/-1">'+esc(ERR)+'</div>':'<div class="sk"></div>'.repeat(6);
+    return;
+  }
   const mk=['all',...[...new Set(DB.filter(p=>S.tab==='slip'||p.sport===S.sport).map(p=>p.market))].sort()];
   if(!mk.includes(S.market))S.market='all';
-  $('mkt').innerHTML=mk.map(k=>`<option value="${esc(k)}"${k===S.market?' selected':''}>${k==='all'?'All markets':esc(k)}</option>`).join('');
+  $('mkts').innerHTML=mk.map(k=>`<button class="chip${k===S.market?' on':''}" aria-pressed="${k===S.market}" data-m="${esc(k)}">${k==='all'?'All markets':esc(k)}</button>`).join('');
+  $('mkts').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.market=b.dataset.m;render()});
+  const label=SPLITS.find(s=>s[0]===S.split)[1];
+
+  // top picks: best edge for this sport and sample. Hidden on My slip and while searching.
+  const tp=S.tab==='slip'||S.q?[]:topPicks();
+  $('picksBox').hidden=!tp.length;
+  if(tp.length){
+    $('pkNote').textContent=`Biggest gap between hit rate and the odds, ${label} sample`;
+    $('picks').innerHTML=tp.map(({p,st})=>`<article class="pick">
+      <div><button class="open" data-open="${esc(p.id)}">${esc(p.player)}</button>${p.injury.self?'<span class="inj" title="'+esc(p.injury.self)+'"></span>':''}<div class="mut">${matchup(p)}</div></div>
+      <div class="pp"><b>Over ${p.line}</b> ${esc(p.market.toLowerCase())}</div>
+      ${mini(st,p.line)}
+      <div class="pf"><span class="rate" style="color:${rateColor(st.pct)}">${st.pct}%</span><span class="od"><b>${fmtOdds(p.odds)}</b><br><span class="edge" style="color:var(--hit)">${sgn(st.edge)} edge</span></span></div></article>`).join('');
+    bind($('picks'));
+  }
+
   const q=S.q.toLowerCase();
   let list=DB.filter(p=>{
     if(S.tab==='slip'){if(!S.slip.includes(p.id))return false}
@@ -188,29 +324,21 @@ function render(){
     if(st.pct<S.minHit)return false;
     return !q||(p.player+' '+p.team+' '+p.market).toLowerCase().includes(q);
   }).map(p=>({p,st:stats(p,S.split,p.line)}));
-  const dec=o=>o>0?1+o/100:1+100/-o;
   list.sort((a,b)=>S.sort==='edge'?b.st.edge-a.st.edge:S.sort==='odds'?dec(b.p.odds)-dec(a.p.odds):b.st.pct-a.st.pct||b.st.n-a.st.n);
-  const label=SPLITS.find(s=>s[0]===S.split)[1];
-  $('banner').textContent=S.tab==='cheat'?`${list.length} props that cleared the line in every ${label} game.`:S.tab==='slip'?`${list.length} saved ${list.length===1?'prop':'props'} across all sports (${label} split).`:`${list.length} props, ${label} split.`;
+  $('banner').textContent=S.tab==='cheat'?`${list.length} props that cleared the line in every ${label} game.`:S.tab==='slip'?`${list.length} saved ${list.length===1?'prop':'props'} across all sports (${label} sample).`:`${list.length} props, ${label} sample.`;
   if(!list.length){
-    $('grid').innerHTML=`<div class="card" style="grid-column:1/-1;text-align:center">${S.tab==='slip'?'Your slip is empty. Tap Save on any prop to add it.':'No props match these filters. Lower the minimum hit rate or change the split.'}</div>`;return;
+    $('grid').innerHTML=`<div class="card" style="grid-column:1/-1;text-align:center">${S.tab==='slip'?'Your slip is empty. Tap the star on any prop to save it here.':'No props match these filters. Try a lower minimum hit rate, another market, or the All props tab.'}</div>`;return;
   }
   $('grid').innerHTML=list.map(({p,st})=>{
     const saved=S.slip.includes(p.id);
-    const pips=st.gs.slice().reverse().map(x=>`<i style="height:${Math.max(18,Math.min(100,x.v/Math.max(...st.gs.map(g=>g.v),p.line)*100))}%;background:${x.v>p.line?'var(--hit)':'var(--miss)'}"></i>`).join('');
-    return `<article class="card">
-      <div class="row"><div><h3 style="font-size:18px">${esc(p.player)}</h3><div class="mut">${esc(p.team)}</div></div>
-        <button class="btn" data-save="${p.id}" aria-pressed="${saved}" aria-label="${saved?'Remove from':'Save to'} slip">${saved?'Saved':'Save'}</button></div>
-      <div class="row" style="align-items:flex-end"><div><div class="big" style="color:${rateColor(st.pct)}">${st.pct}%</div><div class="mut">${st.hits}/${st.n} games over</div></div>
-        <div style="text-align:right"><b>Over ${p.line}</b><div class="mut">${esc(p.market)}</div></div></div>
-      <div class="pips" aria-hidden="true">${pips}</div>
-      <div class="row mut"><span>Odds <b style="color:var(--tx)">${fmtOdds(p.odds)}</b> (${implied(p.odds).toFixed(1)}% implied)</span>
-        <span class="tag" style="color:${st.edge>=0?'var(--hit)':'var(--miss)'}">Edge ${st.edge>=0?'+':''}${st.edge.toFixed(1)}</span></div>
-      <ul class="why">${why(p,S.split,p.line).slice(0,3).map(t=>'<li>'+esc(t)+'</li>').join('')}</ul>
-      <div class="mut">Next: ${p.home?'vs':'@'} ${esc(p.opp)}, ${esc(fmtTime(p.start))}.${p.injury.self?' '+esc(p.player)+': '+esc(p.injury.self):''}</div>
-      <button class="btn" data-open="${p.id}">Open chart</button></article>`}).join('');
-  $('grid').querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>{toggle(b.dataset.save);render()});
-  $('grid').querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openModal(b.dataset.open));
+    return `<article class="prop">
+      <div class="info"><button class="open" data-open="${esc(p.id)}">${esc(p.player)}</button>${p.injury.self?'<span class="inj" title="'+esc(p.injury.self)+'"></span>':''}
+        <div class="pp"><b>Over ${p.line}</b> ${esc(p.market.toLowerCase())}</div><div class="mut">${matchup(p)}</div></div>
+      ${mini(st,p.line)}
+      ${ring(st.pct)}
+      <div class="foot2"><span>${st.hits} of ${st.n} games over</span><span><b style="color:var(--tx)">${fmtOdds(p.odds)}</b> <span class="edge" style="color:${st.edge>=0?'var(--hit)':'var(--miss)'}">${sgn(st.edge)} edge</span></span></div>
+      <button class="star" data-save="${esc(p.id)}" aria-pressed="${saved}" aria-label="${saved?'Remove from':'Save to'} slip">${starSvg}</button></article>`}).join('');
+  bind($('grid'));
 }
 
 function toggle(id){
@@ -219,7 +347,7 @@ function toggle(id){
 
 let chart=null,lastFocus=null;
 function openModal(id){
-  S.modal=DB.find(p=>p.id===id);S.mline=S.modal.line;lastFocus=document.activeElement;
+  S.modal=DB.find(p=>p.id===id);if(!S.modal)return;S.mline=S.modal.line;lastFocus=document.activeElement;
   $('mHead').innerHTML=`<h2 id="mTitle" style="font-size:22px">${esc(S.modal.player)}</h2><div class="mut">${esc(S.modal.team)} · Over ${S.modal.line} ${esc(S.modal.market.toLowerCase())} (${fmtOdds(S.modal.odds)})</div>`;
   $('modal').classList.add('open');drawModal();$('mClose').focus();
 }
@@ -235,8 +363,9 @@ function drawModal(){
   $('mWhy').innerHTML=why(p,S.split,line).map(t=>'<li>'+esc(t)+'</li>').join('');
   $('mCtx').innerHTML=`<div><b>Next game:</b> ${p.home?'vs':'@'} ${esc(p.opp)}, ${esc(fmtTime(p.start))}</div><div><b>${esc(p.player)}:</b> ${esc(p.injury.self||'No injury listed')}</div><div><b>${esc(p.team)} out:</b> ${esc(p.injury.team.join(', ')||'None listed')}</div><div><b>${esc(p.opp)} out:</b> ${esc(p.injury.opp.join(', ')||'None listed')}</div>`;
   const safe=u=>/^https:\/\//.test(u||'')?u:null;
-  $('mBooks').innerHTML=p.books.slice(0,8).map(b=>`<div class="row"><span><b>${esc(b.book)}:</b> Over ${b.line} (${fmtOdds(b.odds)})</span>${safe(b.link)?`<a class="btn" style="padding:6px 10px;text-decoration:none;color:inherit;white-space:nowrap" href="${esc(b.link)}" target="_blank" rel="noopener noreferrer nofollow" aria-label="Open ${esc(b.book)} event page">Open game</a>`:''}</div>`).join('')+'<div class="mut" style="margin-top:6px">Links open the sportsbook\'s game page, not a bet slip. 19+ in Ontario. Please gamble responsibly.</div>';
+  $('mBooks').innerHTML=p.books.slice(0,8).map(b=>`<div class="row"><span><b>${esc(b.book)}:</b> Over ${b.line} (${fmtOdds(b.odds)})</span>${safe(b.link)?`<a class="btn" style="padding:6px 10px;min-height:36px;display:inline-flex;align-items:center;text-decoration:none;color:inherit;white-space:nowrap" href="${esc(b.link)}" target="_blank" rel="noopener noreferrer nofollow" aria-label="Open ${esc(b.book)} event page">Open game</a>`:''}</div>`).join('')+'<div class="mut" style="margin-top:6px">Links open the sportsbook\'s game page, not a bet slip. 19+ in Ontario. Please gamble responsibly.</div>';
   const saved=S.slip.includes(p.id);$('mSave').textContent=saved?'Remove from slip':'Add to slip';
+  if(typeof Chart==='undefined')return;
   const css=getComputedStyle(document.documentElement),c=n=>css.getPropertyValue(n).trim();
   if(chart)chart.destroy();
   chart=new Chart($('chart').getContext('2d'),{data:{
@@ -257,25 +386,34 @@ document.addEventListener('keydown',e=>{
   if(!S.modal)return;
   if(e.key==='Escape')closeModal();
   if(e.key==='Tab'){ // keep focus inside the dialog
-    const f=[...$('modal').querySelectorAll('button')];const i=f.indexOf(document.activeElement);
+    const f=[...$('modal').querySelectorAll('button,a[href]')];const i=f.indexOf(document.activeElement);
     if(e.shiftKey&&i<=0){e.preventDefault();f[f.length-1].focus()}
     else if(!e.shiftKey&&i===f.length-1){e.preventDefault();f[0].focus()}
   }
 });
-$('mkt').onchange=e=>{S.market=e.target.value;render()};
 $('minHit').onchange=e=>{S.minHit=+e.target.value;render()};
 $('sort').onchange=e=>{S.sort=e.target.value;render()};
 $('q').oninput=e=>{S.q=e.target.value;render()};
+
+function ago(d){
+  const m=Math.round((Date.now()-d)/60000);
+  if(m<1)return 'just now';if(m<60)return m+' min ago';
+  const h=Math.round(m/60);return h<24?h+' h ago':d.toLocaleDateString([],{month:'short',day:'numeric'});
+}
+function stamp(){
+  if(!UPDATED)return;
+  $('upd').textContent='Updated '+ago(UPDATED);$('upd').title=UPDATED.toLocaleString();
+}
+setInterval(stamp,60000);
+
 async function load(){
-  renderControls();
-  $('grid').innerHTML='<div class="card" style="grid-column:1/-1">Loading props...</div>';
+  render();
   try{
     const r=await fetch('props.json',{cache:'no-store'});
     if(!r.ok)throw new Error('Data file not found yet. Run the Build data and deploy workflow once.');
     const d=await r.json();
     if(!d.props||!d.props.length)throw new Error('No props available right now. '+(d.errors||[]).join(' '));
-    DB=d.props;
-    $('upd').textContent='Updated '+new Date(d.updated).toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+    DB=d.props;UPDATED=new Date(d.updated);stamp();
     if(!DB.some(p=>p.sport===S.sport))S.sport=DB[0].sport;
   }catch(e){ERR=e.message;render();return}
   render();
