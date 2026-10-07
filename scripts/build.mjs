@@ -93,7 +93,7 @@ async function oddsProps(cfg, sport) {
   if (!markets) return [];
   const res = await pool(soon, 1, async (e) => {
     await sleep(300); // one game at a time, spaced out, to stay under burst limits
-    try { return { e, o: await getJson(`${base}/sports/${cfg.key}/events/${e.id}/odds?apiKey=${key}&regions=${regions}&markets=${markets}&oddsFormat=american`) }; }
+    try { return { e, o: await getJson(`${base}/sports/${cfg.key}/events/${e.id}/odds?apiKey=${key}&regions=${regions}&markets=${markets}&oddsFormat=american&includeLinks=true`) }; }
     catch (err) { return { e, err: err.message }; }
   });
   console.log(`${sport}: odds for ${soon.length} games fetched, ${Math.round((Date.now() - START) / 1000)}s elapsed`);
@@ -132,7 +132,7 @@ async function oddsProps(cfg, sport) {
       const pname = String(who || '').replace(/\s*\([^)]*\)\s*$/, '').replace(/^([^,]+),\s*(.+)$/, '$2 $1').trim(); // some feeds append "(TEAM)"
       const k = `${norm(pname)}|${m.key}`;
       if (!map.has(k)) map.set(k, { player: pname, mkey: m.key, event: r.e, books: [] });
-      map.get(k).books.push({ book: b.title, line, odds: x.price });
+      map.get(k).books.push({ book: b.title, line, odds: x.price, link: typeof b.link === 'string' && /^https:\/\//.test(b.link) ? b.link : null });
     }
   }
   return [...map.values()];
