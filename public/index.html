@@ -234,7 +234,8 @@ function drawModal(){
   $('mStats').textContent=`Average ${st.avg.toFixed(1)} · Implied ${implied(p.odds).toFixed(1)}% · Edge ${st.edge>=0?'+':''}${st.edge.toFixed(1)}`;
   $('mWhy').innerHTML=why(p,S.split,line).map(t=>'<li>'+esc(t)+'</li>').join('');
   $('mCtx').innerHTML=`<div><b>Next game:</b> ${p.home?'vs':'@'} ${esc(p.opp)}, ${esc(fmtTime(p.start))}</div><div><b>${esc(p.player)}:</b> ${esc(p.injury.self||'No injury listed')}</div><div><b>${esc(p.team)} out:</b> ${esc(p.injury.team.join(', ')||'None listed')}</div><div><b>${esc(p.opp)} out:</b> ${esc(p.injury.opp.join(', ')||'None listed')}</div>`;
-  $('mBooks').innerHTML=p.books.slice(0,8).map(b=>`<div><b>${esc(b.book)}:</b> Over ${b.line} (${fmtOdds(b.odds)})</div>`).join('');
+  const safe=u=>/^https:\/\//.test(u||'')?u:null;
+  $('mBooks').innerHTML=p.books.slice(0,8).map(b=>`<div class="row"><span><b>${esc(b.book)}:</b> Over ${b.line} (${fmtOdds(b.odds)})</span>${safe(b.link)?`<a class="btn" style="padding:6px 10px;text-decoration:none;color:inherit;white-space:nowrap" href="${esc(b.link)}" target="_blank" rel="noopener noreferrer nofollow" aria-label="Open ${esc(b.book)} event page">Open game</a>`:''}</div>`).join('')+'<div class="mut" style="margin-top:6px">Links open the sportsbook\'s game page, not a bet slip. 19+ in Ontario. Please gamble responsibly.</div>';
   const saved=S.slip.includes(p.id);$('mSave').textContent=saved?'Remove from slip':'Add to slip';
   const css=getComputedStyle(document.documentElement),c=n=>css.getPropertyValue(n).trim();
   if(chart)chart.destroy();
