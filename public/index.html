@@ -42,10 +42,10 @@ button,select,input{font:inherit;color:inherit}
 #upd::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--hit);margin-right:6px;vertical-align:1px}
 
 /* top picks */
-#picksBox{margin:18px 0 6px}
+#picksBox{margin:14px 0 6px}
 #picksBox[hidden]{display:none}
-.pk-head{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
-.pk-head h2{font-size:20px}
+.pk-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 10px;margin-bottom:8px}
+.pk-head h2{font-size:20px;white-space:nowrap}
 .picks{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;padding:2px 2px 10px;margin:0 -2px;scrollbar-width:thin}
 .pick{position:relative;flex:0 0 224px;scroll-snap-align:start;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:6px}
 .pick .nm{font:700 17px/1.2 'Bricolage Grotesque',sans-serif}
@@ -56,10 +56,10 @@ button,select,input{font:inherit;color:inherit}
 .pick .od{font-size:13px;text-align:right}
 
 /* sticky filters */
-.sticky{position:sticky;top:0;z-index:6;margin:0 -16px;padding:10px 16px 8px;background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line);display:grid;gap:8px}
+.sticky{position:sticky;top:0;z-index:6;margin:0 -16px;padding:10px 16px 8px;background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
 .fa{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .fa .seg{flex:none}
-#q{flex:1;min-width:150px;min-height:40px}
+#q{flex:1 1 0;width:0;min-width:120px;min-height:40px}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
 .seg button{background:none;border:0;padding:8px 14px;cursor:pointer;color:var(--mut);font-weight:600;white-space:nowrap;min-height:40px}
 .seg button.on{background:var(--acc);color:var(--onacc)}
@@ -80,10 +80,10 @@ button,select,input{font:inherit;color:inherit}
 .prop .foot2{grid-area:foot;display:flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline;font-size:13px;color:var(--mut)}
 .prop .star{grid-area:star;justify-self:center}
 .nm{font:700 17px/1.2 'Bricolage Grotesque',sans-serif;display:inline}
-.open{all:unset;cursor:pointer;font:700 17px/1.2 'Bricolage Grotesque',sans-serif;color:var(--tx)}
-.open::after{content:'';position:absolute;inset:0;border-radius:16px}
-.open:focus-visible::after{outline:2px solid var(--acc);outline-offset:2px}
-.pick .open::after{border-radius:16px}
+.rowlink{all:unset;cursor:pointer;font:700 17px/1.2 'Bricolage Grotesque',sans-serif;color:var(--tx)}
+.rowlink::after{content:'';position:absolute;inset:0;border-radius:16px}
+.rowlink:focus-visible::after{outline:2px solid var(--acc);outline-offset:2px}
+.pick .rowlink::after{border-radius:16px}
 .inj{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mid);margin-left:6px;vertical-align:1px}
 .pp b{font-weight:700}
 .edge{font-weight:700;white-space:nowrap}
@@ -91,8 +91,8 @@ button,select,input{font:inherit;color:inherit}
 .mini .h{fill:var(--hit)}.mini .m{fill:var(--miss)}
 .mini .ln{stroke:var(--tx);stroke-width:1.5;stroke-dasharray:4 3;opacity:.85}
 .ring{--p:0;--c:var(--hit);width:54px;height:54px;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p)*1%),var(--line) 0);display:grid;place-items:center;position:relative;flex:none}
-.ring::before{content:'';position:absolute;inset:5px;border-radius:50%;background:var(--card)}
-.ring b{position:relative;font:800 14px 'Bricolage Grotesque',sans-serif}
+.ring::before{content:'';position:absolute;inset:4px;border-radius:50%;background:var(--card)}
+.ring b{position:relative;font:800 13px 'Bricolage Grotesque',sans-serif}
 .star{position:relative;z-index:1;width:44px;height:44px;display:grid;place-items:center;background:none;border:0;border-radius:12px;cursor:pointer;color:var(--mut)}
 .star svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
 .star[aria-pressed="true"]{color:var(--mid)}
@@ -103,16 +103,19 @@ button,select,input{font:inherit;color:inherit}
 @keyframes sh{from{background-position:100% 0}to{background-position:-100% 0}}
 
 /* modal */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;height:100vh;height:100dvh;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
 .modal.open{display:flex}
 .modal.open .sheet{animation:up .22s ease-out}
 @keyframes up{from{transform:translateY(28px);opacity:0}to{transform:none;opacity:1}}
-.sheet{background:var(--card);border:1px solid var(--line);border-radius:16px;max-width:680px;width:100%;max-height:92vh;overflow:auto;padding:20px}
+.sheet{background:var(--card);border:1px solid var(--line);border-radius:16px;max-width:680px;width:100%;max-height:92%;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:20px}
+.chart canvas{touch-action:pan-y}
+.msplit{margin-top:12px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}.msplit::-webkit-scrollbar{display:none}
 .chart{height:260px;margin:12px 0}
 .why{margin:0;padding:0;list-style:none;display:grid;gap:5px;font-size:13px}.why li::before{content:'• ';color:var(--acc)}.ctx{border:1px solid var(--line);border-radius:10px;padding:10px;display:grid;gap:4px;font-size:13px}.ctx b{color:var(--tx)}h4{margin:14px 0 6px;font:700 14px 'Bricolage Grotesque',sans-serif}
 .foot{color:var(--mut);font-size:12px;margin:28px 0 8px;border-top:1px solid var(--line);padding-top:14px}
 
 /* tabs: desktop in the filter bar, bottom bar on phones */
+#tabs{display:inline-flex;margin-top:14px}
 #tabs button{min-height:40px}
 
 @media (max-width:640px){
@@ -121,7 +124,7 @@ button,select,input{font:inherit;color:inherit}
   .head h1{font-size:24px}
   .head .sub{display:none}
   .sticky{margin:0 -12px;padding:8px 12px 6px}
-  #tabs{position:fixed;left:0;right:0;bottom:0;z-index:9;border-radius:0;border-width:1px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
+  #tabs{display:flex;margin:0;position:fixed;left:0;right:0;bottom:0;z-index:9;border-radius:0;border-width:1px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
   #tabs button{flex:1;padding:12px 6px;min-height:48px}
   .fa{flex-wrap:nowrap}
   #q{min-width:0}
@@ -131,7 +134,7 @@ button,select,input{font:inherit;color:inherit}
   .prop{grid-template-columns:1fr 84px 52px;column-gap:10px}
   .ring{width:50px;height:50px}
   .modal{align-items:flex-end;padding:0}
-  .sheet{max-width:none;border-radius:18px 18px 0 0;max-height:94vh;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+  .sheet{max-width:none;border-radius:18px 18px 0 0;max-height:94%;padding:16px 16px calc(28px + env(safe-area-inset-bottom,0px))}
   .chart{height:230px}
   .sheet .row{flex-wrap:wrap}
   .sheet #mSave{width:100%}
@@ -150,6 +153,8 @@ button,select,input{font:inherit;color:inherit}
     <div class="mut" id="upd"></div>
   </div>
 
+  <div class="seg" id="tabs" role="tablist" aria-label="View"></div>
+
   <section id="picksBox" hidden aria-label="Top picks">
     <div class="pk-head"><h2>Top picks</h2><span class="mut" id="pkNote"></span></div>
     <div class="picks" id="picks"></div>
@@ -157,9 +162,8 @@ button,select,input{font:inherit;color:inherit}
 
   <div class="sticky">
     <div class="fa">
-      <div class="seg" id="tabs" role="tablist" aria-label="View"></div>
       <div class="seg" id="sports" aria-label="Sport"></div>
-      <input id="q" class="field" type="search" placeholder="Search player or team" aria-label="Search player or team">
+      <input id="q" class="field" type="search" placeholder="Search players" aria-label="Search player or team">
     </div>
     <div class="chips scroll" id="mkts" aria-label="Market"></div>
     <div class="chips scroll" aria-label="Sample and sorting">
@@ -179,6 +183,7 @@ button,select,input{font:inherit;color:inherit}
 <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
   <div class="sheet">
     <div class="row"><div id="mHead"></div><button class="btn" id="mClose" aria-label="Close">Close</button></div>
+    <div class="msplit" id="mSplits" aria-label="Sample"></div>
     <div class="row" style="margin-top:12px">
       <div class="row" style="gap:10px"><span class="mut">Test line</span>
         <button class="btn" id="dn" aria-label="Lower line">−</button><b id="lineVal" style="min-width:40px;text-align:center"></b><button class="btn" id="up" aria-label="Raise line">+</button></div>
@@ -306,7 +311,7 @@ function render(){
   if(tp.length){
     $('pkNote').textContent=`Biggest gap between hit rate and the odds, ${label} sample`;
     $('picks').innerHTML=tp.map(({p,st})=>`<article class="pick">
-      <div><button class="open" data-open="${esc(p.id)}">${esc(p.player)}</button>${p.injury.self?'<span class="inj" title="'+esc(p.injury.self)+'"></span>':''}<div class="mut">${matchup(p)}</div></div>
+      <div><button class="rowlink" data-open="${esc(p.id)}">${esc(p.player)}</button>${p.injury.self?'<span class="inj" title="'+esc(p.injury.self)+'"></span>':''}<div class="mut">${matchup(p)}</div></div>
       <div class="pp"><b>Over ${p.line}</b> ${esc(p.market.toLowerCase())}</div>
       ${mini(st,p.line)}
       <div class="pf"><span class="rate" style="color:${rateColor(st.pct)}">${st.pct}%</span><span class="od"><b>${fmtOdds(p.odds)}</b><br><span class="edge" style="color:var(--hit)">${sgn(st.edge)} edge</span></span></div></article>`).join('');
@@ -332,7 +337,7 @@ function render(){
   $('grid').innerHTML=list.map(({p,st})=>{
     const saved=S.slip.includes(p.id);
     return `<article class="prop">
-      <div class="info"><button class="open" data-open="${esc(p.id)}">${esc(p.player)}</button>${p.injury.self?'<span class="inj" title="'+esc(p.injury.self)+'"></span>':''}
+      <div class="info"><button class="rowlink" data-open="${esc(p.id)}">${esc(p.player)}</button>${p.injury.self?'<span class="inj" title="'+esc(p.injury.self)+'"></span>':''}
         <div class="pp"><b>Over ${p.line}</b> ${esc(p.market.toLowerCase())}</div><div class="mut">${matchup(p)}</div></div>
       ${mini(st,p.line)}
       ${ring(st.pct)}
@@ -349,14 +354,16 @@ let chart=null,lastFocus=null;
 function openModal(id){
   S.modal=DB.find(p=>p.id===id);if(!S.modal)return;S.mline=S.modal.line;lastFocus=document.activeElement;
   $('mHead').innerHTML=`<h2 id="mTitle" style="font-size:22px">${esc(S.modal.player)}</h2><div class="mut">${esc(S.modal.team)} · Over ${S.modal.line} ${esc(S.modal.market.toLowerCase())} (${fmtOdds(S.modal.odds)})</div>`;
-  $('modal').classList.add('open');drawModal();$('mClose').focus();
+  document.documentElement.style.overflow='hidden';$('modal').classList.add('open');drawModal();$('mClose').focus();
 }
 function closeModal(){
-  $('modal').classList.remove('open');S.modal=null;if(lastFocus)lastFocus.focus();
+  document.documentElement.style.overflow='';$('modal').classList.remove('open');S.modal=null;if(lastFocus&&document.contains(lastFocus))lastFocus.focus();
 }
 function drawModal(){
   const p=S.modal,line=S.mline,st=stats(p,S.split,line);
   const gs=st.gs.slice().reverse(); // oldest to newest, left to right
+  $('mSplits').innerHTML=SPLITS.map(([k,l])=>`<button class="chip${k===S.split?' on':''}" aria-pressed="${k===S.split}" data-k="${k}">${l}</button>`).join('');
+  $('mSplits').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.split=b.dataset.k;render();drawModal();const n=$('mSplits').querySelector('[data-k="'+S.split+'"]');if(n)n.focus()});
   $('lineVal').textContent=line;
   $('mRate').textContent=`${st.hits}/${st.n} over (${st.pct}%)`;$('mRate').style.color=rateColor(st.pct);
   $('mStats').textContent=`Average ${st.avg.toFixed(1)} · Implied ${implied(p.odds).toFixed(1)}% · Edge ${st.edge>=0?'+':''}${st.edge.toFixed(1)}`;
