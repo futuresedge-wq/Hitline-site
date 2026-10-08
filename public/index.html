@@ -57,6 +57,8 @@ button,select,input{font:inherit;color:inherit}
 .gchip b{display:flex;align-items:center;white-space:nowrap}
 .gchip b .tl{width:20px;height:20px;margin-right:4px}.gchip b .tl img{width:14px;height:14px}
 .mhead{display:flex;align-items:center;gap:12px}
+.inj-t{display:inline-block;margin-left:6px;padding:0 7px;border:1px solid var(--mid);border-radius:999px;font-size:11px;font-weight:700;color:var(--mid);vertical-align:2px;white-space:nowrap}
+.inj-t.out{border-color:var(--miss);color:var(--miss)}
 .bk{display:inline-block;margin-left:6px;padding:0 6px;border:1px solid var(--line);border-radius:6px;font-size:11px;font-weight:700;color:var(--mut);vertical-align:1px;white-space:nowrap}
 .bk.best{color:var(--hit);border-color:var(--hit)}
 .tag.best{color:var(--hit);border-color:var(--hit)}
@@ -282,6 +284,8 @@ const dec=o=>o>0?1+o/100:1+100/-o;
 // Best price: the best odds at the main line among books you can bet with. Pinnacle is shown for reference only.
 const REF=/pinnacle/i;
 const SHORT=[[/draftkings/i,'DK'],[/fanduel/i,'FD'],[/betmgm|mgm/i,'MGM'],[/betrivers/i,'BR'],[/hard ?rock/i,'HR'],[/betway/i,'Betway'],[/pinnacle/i,'PIN']];
+// Injury status in words: the part before the colon, e.g. "Questionable". Red for Out/Doubtful/IR, amber otherwise.
+const injTag=p=>{const t=p.injury&&p.injury.self;if(!t)return '';const st=String(t).split(':')[0].trim().slice(0,22)||'Injury';if(!/out|doubtful|questionable|day.?to.?day|injured|\bir\b|\bpup\b|suspen|inactive|limited|game.?time/i.test(st))return '';return `<span class="inj-t${/out|injured reserve|\bir\b|doubtful|suspen/i.test(st)?' out':''}" title="${esc(t)}">${esc(st)}</span>`};
 const shortBook=n=>{for(const [re,t] of SHORT)if(re.test(n))return t;return String(n).slice(0,10)};
 function price(p){
   if(p._pr)return p._pr;
@@ -386,7 +390,7 @@ function render(){
   if(tp.length){
     $('pkNote').textContent=`Biggest gap between hit rate and the odds, ${label} sample`;
     $('picks').innerHTML=tp.map(({p,st})=>`<article class="pick">
-      <div><button class="rowlink" data-open="${esc(p.id)}">${esc(p.player)}</button>${p.injury.self?'<span class="inj" title="'+esc(p.injury.self)+'"></span>':''}<div class="mut">${matchup(p)}</div></div>
+      <div><button class="rowlink" data-open="${esc(p.id)}">${esc(p.player)}</button>${injTag(p)}<div class="mut">${matchup(p)}</div></div>
       <div class="pp"><b>Over ${p.line}</b> ${esc(p.market.toLowerCase())}</div>
       ${mini(st,p.line)}
       <div class="pf"><span class="rate" style="color:${rateColor(st.pct)}">${st.pct}%</span><span class="od"><b>${fmtOdds(p.odds)}</b>${bkTag(p)}<br><span class="edge" style="color:var(--hit)">${sgn(st.edge)} edge</span></span></div></article>`).join('');
@@ -413,7 +417,7 @@ function render(){
   $('grid').innerHTML=list.map(({p,st})=>{
     const saved=S.slip.includes(p.id);
     return `<article class="prop">
-      <div class="info"><button class="rowlink" data-open="${esc(p.id)}">${esc(p.player)}</button>${p.injury.self?'<span class="inj" title="'+esc(p.injury.self)+'"></span>':''}
+      <div class="info"><button class="rowlink" data-open="${esc(p.id)}">${esc(p.player)}</button>${injTag(p)}
         <div class="pp"><b>Over ${p.line}</b> ${esc(p.market.toLowerCase())}</div><div class="mut">${matchup(p)}</div></div>
       ${mini(st,p.line)}
       ${ring(st.pct)}
