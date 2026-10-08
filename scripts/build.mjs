@@ -164,7 +164,7 @@ function assemble(sport, r, games, team, opp, home, injMap, teamFull, oppFull) {
   const line = +Object.entries(cnt).sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
   const books = r.books.slice().sort((a, b) => b.odds - a.odds);
   return { id: `${sport}-${norm(r.player).replace(/ /g, '_')}-${r.mkey}`, sport, player: r.player, team, opp, home, start: r.event.commence_time,
-    market: MARKETS[sport].list[r.mkey][0], line, odds: books.find((b) => b.line === line).odds, books, games, injury: inj(injMap, r.player, teamFull, oppFull) };
+    market: MARKETS[sport].list[r.mkey][0], line, odds: (books.find((b) => b.line === line && !/pinnacle/i.test(b.book)) || books.find((b) => b.line === line)).odds, books, games, injury: inj(injMap, r.player, teamFull, oppFull) };
 }
 
 // Stats missing from the NHL game log are read from each game's boxscore instead
