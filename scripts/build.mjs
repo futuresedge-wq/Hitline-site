@@ -147,7 +147,7 @@ async function injuries(path) {
 }
 function inj(m, player, team, opp) {
   const bad = (x) => /out|injured|doubtful/i.test(x.status), list = (k) => m[norm(k)] || [];
-  const self = list(team).find((x) => x.name === norm(player)), fmt = (x) => `${x.disp} (${x.status})`;
+  const concern = (x) => /out|doubtful|questionable|day.?to.?day|injured|\bir\b|\bpup\b|suspen|inactive|limited|game.?time/i.test(x.status), self = list(team).find((x) => x.name === norm(player) && concern(x)), fmt = (x) => `${x.disp} (${x.status})`;
   return { self: self ? self.status + (self.detail ? ': ' + self.detail : '') : null, team: list(team).filter(bad).slice(0, 4).map(fmt), opp: list(opp).filter(bad).slice(0, 4).map(fmt) };
 }
 
