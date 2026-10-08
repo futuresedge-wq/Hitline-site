@@ -152,7 +152,8 @@ button,select,input{font:inherit;color:inherit}
 .foot{color:var(--mut);font-size:12px;margin:28px 0 8px;border-top:1px solid var(--line);padding-top:14px}
 
 /* tabs: desktop in the filter bar, bottom bar on phones */
-#tabs{display:inline-flex;margin-top:14px}
+.topbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+#tabs{display:inline-flex}
 #tabs button{min-height:40px}
 
 @media (max-width:640px){
@@ -161,6 +162,7 @@ button,select,input{font:inherit;color:inherit}
   .head h1{font-size:24px}
   .head .sub{display:none}
   .sticky{margin:0 -12px;padding:8px 12px 6px}
+  #sports{width:100%}#sports button{flex:1}
   #tabs{display:flex;margin:0;position:fixed;left:0;right:0;bottom:0;z-index:9;border-radius:0;border-width:1px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
   #tabs button{flex:1;padding:12px 6px;min-height:48px}
   .fa{flex-wrap:nowrap}
@@ -190,7 +192,10 @@ button,select,input{font:inherit;color:inherit}
     <div class="mut" id="upd"></div>
   </div>
 
-  <div class="seg" id="tabs" role="tablist" aria-label="View"></div>
+  <div class="topbar">
+    <div class="seg" id="sports" aria-label="Sport"></div>
+    <div class="seg" id="tabs" role="tablist" aria-label="View"></div>
+  </div>
 
   <div class="games scroll" id="games" hidden aria-label="Games"></div>
 
@@ -201,7 +206,6 @@ button,select,input{font:inherit;color:inherit}
 
   <div class="sticky" id="filters">
     <div class="fa">
-      <div class="seg" id="sports" aria-label="Sport"></div>
       <input id="q" class="field" type="search" placeholder="Search players" aria-label="Search player or team">
     </div>
     <div class="chips scroll" id="mkts" aria-label="Market"></div>
@@ -356,6 +360,7 @@ function bind(root){
 function render(){
   renderControls();
   savePrefs();
+  $('sports').hidden=S.tab==='rec'||S.tab==='slip'; // both views span every sport
   $('minHit').value=String(S.minHit);$('sort').value=S.sort;
   const isRec=S.tab==='rec';
   $('filters').hidden=isRec;$('banner').hidden=isRec;$('grid').hidden=isRec;$('record').hidden=!isRec;
