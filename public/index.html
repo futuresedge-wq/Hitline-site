@@ -221,7 +221,7 @@ button,select,input{font:inherit;color:inherit}
   <div id="grid" class="list"></div>
   <section id="record" class="rec" hidden aria-label="Track record"></section>
 
-  <div class="foot">Hit rates describe past games and do not predict results. Stats come from the NHL, nflverse and MLB, lines from PropLine and injuries from ESPN, so they can lag official team reports. 19+ in Ontario. If gambling stops being fun, ConnexOntario offers free support at 1-866-531-2600.</div>
+  <div class="foot">Hit rates describe past games and do not predict results. Stats come from the NHL, nflverse, MLB and College Football Data, lines from PropLine and injuries from ESPN, so they can lag official team reports. 19+ in Ontario. If gambling stops being fun, ConnexOntario offers free support at 1-866-531-2600.</div>
 </div>
 
 <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
@@ -242,7 +242,8 @@ button,select,input{font:inherit;color:inherit}
 </div>
 
 <script>
-const SPORTS={nhl:'NHL',nfl:'NFL',mlb:'MLB'};
+const SPORTS={nhl:'NHL',nfl:'NFL',mlb:'MLB',ncaaf:'NCAAF'};
+let LOGOS={};
 const SPLITS=[['l5','L5'],['l10','L10'],['l20','L20'],['home','Home'],['away','Away']];
 const TABS=[['cheat','Cheatsheet'],['all','All props'],['rec','Record'],['slip','My slip']];
 let DB=[],ERR='',UPDATED=null,HIST=null,HISTERR='';
@@ -328,7 +329,8 @@ const starSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.6 
 const LOGO={nhl:{LAK:'la',NJD:'nj',SJS:'sj',TBL:'tb',UTA:'utah'},nfl:{LA:'lar',LAR:'lar',WAS:'wsh'},mlb:{AZ:'ari',CWS:'chw'}};
 // Team logos come from ESPN's public image host. If one fails to load, it simply disappears.
 const logo=(sport,abbr,big)=>{
-  if(!SPORTS[sport]||!/^[A-Za-z]{2,4}$/.test(abbr||''))return '';
+  if(!SPORTS[sport]||!/^[A-Za-z0-9&]{2,6}$/.test(abbr||''))return '';
+  if(sport==='ncaaf'){const id=LOGOS.ncaaf&&LOGOS.ncaaf[abbr];return id?`<span class="tl${big?' lg':''}"><img src="https://a.espncdn.com/i/teamlogos/ncaa/500/${id}.png" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.remove()"></span>`:''}
   const A=abbr.toUpperCase(),slug=(LOGO[sport]&&LOGO[sport][A])||A.toLowerCase(),alt=sport==='mlb'&&A==='ATH'?'oak':'';
   const u=x=>`https://a.espncdn.com/i/teamlogos/${sport}/500/${x}.png`;
   return `<span class="tl${big?' lg':''}"><img src="${u(slug)}"${alt?` data-alt="${u(alt)}"`:''} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="if(this.dataset.alt){this.src=this.dataset.alt;delete this.dataset.alt}else this.parentNode.remove()"></span>`;
@@ -550,7 +552,7 @@ async function load(){
     if(!r.ok)throw new Error('Data file not found yet. Run the Build data and deploy workflow once.');
     const d=await r.json();
     if(!d.props||!d.props.length)throw new Error('No props available right now. '+(d.errors||[]).join(' '));
-    DB=d.props;UPDATED=new Date(d.updated);stamp();loadHist();
+    LOGOS=d.logos||{};DB=d.props;UPDATED=new Date(d.updated);stamp();loadHist();
     if(!DB.some(p=>p.sport===S.sport))S.sport=DB[0].sport;
   }catch(e){ERR=e.message;render();return}
   render();
