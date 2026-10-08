@@ -16,9 +16,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;600;700&display=swap">
 <style>
-:root{--bg:#0e1210;--card:#161c18;--card2:#1c241f;--line:#26302a;--tx:#e8efe9;--mut:#8a9a8f;--acc:#c6f24e;--onacc:#0e1210;--hit:#c6f24e;--miss:#ff6b57;--mid:#f2b84e;--glass:rgba(14,18,16,.88);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-:root[data-theme="light"]{--bg:#f4f6f1;--card:#fff;--card2:#eef2ea;--line:#d9e0d5;--tx:#18211b;--mut:#5d6d62;--acc:#2f6b00;--onacc:#fff;--hit:#2f6b00;--miss:#c4361f;--mid:#9a6a00;--glass:rgba(244,246,241,.9)}
-@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f6f1;--card:#fff;--card2:#eef2ea;--line:#d9e0d5;--tx:#18211b;--mut:#5d6d62;--acc:#2f6b00;--onacc:#fff;--hit:#2f6b00;--miss:#c4361f;--mid:#9a6a00;--glass:rgba(244,246,241,.9)}}
+:root{--bg:#0e1210;--card:#161c18;--card2:#1c241f;--line:#26302a;--tx:#e8efe9;--mut:#8a9a8f;--acc:#c6f24e;--onacc:#0e1210;--onmiss:#0e1210;--hit:#c6f24e;--miss:#ff6b57;--mid:#f2b84e;--glass:rgba(14,18,16,.88);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root[data-theme="light"]{--bg:#f4f6f1;--card:#fff;--card2:#eef2ea;--line:#d9e0d5;--tx:#18211b;--mut:#5d6d62;--acc:#2f6b00;--onacc:#fff;--onmiss:#fff;--hit:#2f6b00;--miss:#c4361f;--mid:#9a6a00;--glass:rgba(244,246,241,.9)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f6f1;--card:#fff;--card2:#eef2ea;--line:#d9e0d5;--tx:#18211b;--mut:#5d6d62;--acc:#2f6b00;--onacc:#fff;--onmiss:#fff;--hit:#2f6b00;--miss:#c4361f;--mid:#9a6a00;--glass:rgba(244,246,241,.9)}}
+[hidden]{display:none!important}
 *{box-sizing:border-box}html{scroll-padding-top:150px}
 body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 Figtree,system-ui,sans-serif}
 h1,h2,h3{font-family:'Bricolage Grotesque',Figtree,sans-serif;margin:0}
@@ -26,7 +27,7 @@ button,select,input{font:inherit;color:inherit}
 .wrap{max-width:1100px;margin:0 auto;padding:16px}
 .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .mut{color:var(--mut);font-size:13px}
-.tag{font-size:12px;border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--mut)}
+.tag{white-space:nowrap;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--mut)}
 .btn{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:600;min-height:44px}
 .btn.pri{background:var(--acc);color:var(--onacc);border-color:var(--acc)}
 .field{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 10px;min-height:36px}
@@ -56,6 +57,26 @@ button,select,input{font:inherit;color:inherit}
 .gchip b{display:flex;align-items:center;white-space:nowrap}
 .gchip b .tl{width:20px;height:20px;margin-right:4px}.gchip b .tl img{width:14px;height:14px}
 .mhead{display:flex;align-items:center;gap:12px}
+.bk{display:inline-block;margin-left:6px;padding:0 6px;border:1px solid var(--line);border-radius:6px;font-size:11px;font-weight:700;color:var(--mut);vertical-align:1px;white-space:nowrap}
+.bk.best{color:var(--hit);border-color:var(--hit)}
+.tag.best{color:var(--hit);border-color:var(--hit)}
+.tag.ref{color:var(--mid);border-color:var(--mid)}
+.rec{display:grid;gap:14px;margin-top:14px}
+.rec h2{font-size:20px}
+.rec-top{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.ring.xl{width:100px;height:100px}.ring.xl::before{inset:8px}.ring.xl b{font-size:24px}
+.rec-win{display:flex;gap:6px}
+.brow{display:flex;justify-content:space-between;align-items:center;gap:10px}.brow>span{min-width:0}
+.rec-sp{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.rec-sp div{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--card)}
+.rec-sp b{font:800 20px/1.1 'Bricolage Grotesque',sans-serif;display:block}
+.res{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.res i{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-weight:800;font-size:15px}
+.res i.ok{background:var(--hit);color:var(--onacc)}
+.res i.no{background:var(--miss);color:var(--onmiss)}
+.res i.wait{border:1px dashed var(--mut);color:var(--mut)}
+.reslist{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(360px,1fr))}
+@media (max-width:640px){.reslist{grid-template-columns:1fr}}
 #picksBox{margin:14px 0 6px}
 #picksBox[hidden]{display:none}
 .pk-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 10px;margin-bottom:8px}
@@ -176,7 +197,7 @@ button,select,input{font:inherit;color:inherit}
     <div class="picks" id="picks"></div>
   </section>
 
-  <div class="sticky">
+  <div class="sticky" id="filters">
     <div class="fa">
       <div class="seg" id="sports" aria-label="Sport"></div>
       <input id="q" class="field" type="search" placeholder="Search players" aria-label="Search player or team">
@@ -192,6 +213,7 @@ button,select,input{font:inherit;color:inherit}
 
   <div id="banner" class="mut"></div>
   <div id="grid" class="list"></div>
+  <section id="record" class="rec" hidden aria-label="Track record"></section>
 
   <div class="foot">Hit rates describe past games and do not predict results. Stats come from the NHL, nflverse and MLB, lines from PropLine and injuries from ESPN, so they can lag official team reports. 19+ in Ontario. If gambling stops being fun, ConnexOntario offers free support at 1-866-531-2600.</div>
 </div>
@@ -216,8 +238,8 @@ button,select,input{font:inherit;color:inherit}
 <script>
 const SPORTS={nhl:'NHL',nfl:'NFL',mlb:'MLB'};
 const SPLITS=[['l5','L5'],['l10','L10'],['l20','L20'],['home','Home'],['away','Away']];
-const TABS=[['cheat','Cheatsheet'],['all','All props'],['slip','My slip']];
-let DB=[],ERR='',UPDATED=null;
+const TABS=[['cheat','Cheatsheet'],['all','All props'],['rec','Record'],['slip','My slip']];
+let DB=[],ERR='',UPDATED=null,HIST=null,HISTERR='';
 const fmtTime=iso=>new Date(iso).toLocaleString([],{weekday:"short",hour:"numeric",minute:"2-digit"});
 
 function why(p,split,line){
@@ -238,7 +260,7 @@ function why(p,split,line){
   return out;
 }
 
-const S={game:'all',market:'all',sport:'nhl',tab:'cheat',split:'l5',minHit:0,sort:'hit',q:'',slip:[],modal:null,mline:0};
+const S={recWin:30,game:'all',market:'all',sport:'nhl',tab:'cheat',split:'l5',minHit:0,sort:'hit',q:'',slip:[],modal:null,mline:0};
 try{S.slip=JSON.parse(localStorage.getItem('hitline-slip')||'[]')}catch(e){}
 try{
   const pr=JSON.parse(localStorage.getItem('hitline-prefs')||'{}');
@@ -257,6 +279,18 @@ const fmtOdds=o=>o>0?'+'+o:String(o);
 const implied=o=>o<0?-o/(-o+100)*100:100/(o+100)*100;
 const rateColor=p=>p===100?'var(--hit)':p>=70?'var(--mid)':'var(--miss)';
 const dec=o=>o>0?1+o/100:1+100/-o;
+// Best price: the best odds at the main line among books you can bet with. Pinnacle is shown for reference only.
+const REF=/pinnacle/i;
+const SHORT=[[/draftkings/i,'DK'],[/fanduel/i,'FD'],[/betmgm|mgm/i,'MGM'],[/betrivers/i,'BR'],[/hard ?rock/i,'HR'],[/betway/i,'Betway'],[/pinnacle/i,'PIN']];
+const shortBook=n=>{for(const [re,t] of SHORT)if(re.test(n))return t;return String(n).slice(0,10)};
+function price(p){
+  if(p._pr)return p._pr;
+  const at=(p.books||[]).filter(b=>b.line===p.line),bet=at.filter(b=>!REF.test(b.book)),pool=bet.length?bet:at;
+  const best=pool.slice().sort((a,b)=>dec(b.odds)-dec(a.odds))[0]||null;
+  const avg=bet.length?bet.reduce((t,b)=>t+implied(b.odds),0)/bet.length:null;
+  return p._pr={best,n:bet.length,gain:best&&avg!=null?avg-implied(best.odds):0,ref:!bet.length&&!!best};
+}
+const bkTag=p=>{const pr=price(p);return pr.best&&pr.best.odds===p.odds?`<span class="bk${pr.n>=2?' best':''}" title="${pr.n>=2?'Best price of '+pr.n+' books: ':'Listed at '}${esc(pr.best.book)}">${esc(shortBook(pr.best.book))}</span>`:''};
 const sgn=n=>(n>=0?'+':'')+n.toFixed(1);
 
 function slice(p,split){
@@ -319,6 +353,9 @@ function render(){
   renderControls();
   savePrefs();
   $('minHit').value=String(S.minHit);$('sort').value=S.sort;
+  const isRec=S.tab==='rec';
+  $('filters').hidden=isRec;$('banner').hidden=isRec;$('grid').hidden=isRec;$('record').hidden=!isRec;
+  if(isRec){$('picksBox').hidden=true;$('games').hidden=true;renderRecord();return}
   if(!DB.length){
     $('banner').textContent='';$('picksBox').hidden=true;$('mkts').innerHTML='';
     $('grid').innerHTML=ERR?'<div class="card" style="grid-column:1/-1">'+esc(ERR)+'</div>':'<div class="sk"></div>'.repeat(6);
@@ -352,7 +389,7 @@ function render(){
       <div><button class="rowlink" data-open="${esc(p.id)}">${esc(p.player)}</button>${p.injury.self?'<span class="inj" title="'+esc(p.injury.self)+'"></span>':''}<div class="mut">${matchup(p)}</div></div>
       <div class="pp"><b>Over ${p.line}</b> ${esc(p.market.toLowerCase())}</div>
       ${mini(st,p.line)}
-      <div class="pf"><span class="rate" style="color:${rateColor(st.pct)}">${st.pct}%</span><span class="od"><b>${fmtOdds(p.odds)}</b><br><span class="edge" style="color:var(--hit)">${sgn(st.edge)} edge</span></span></div></article>`).join('');
+      <div class="pf"><span class="rate" style="color:${rateColor(st.pct)}">${st.pct}%</span><span class="od"><b>${fmtOdds(p.odds)}</b>${bkTag(p)}<br><span class="edge" style="color:var(--hit)">${sgn(st.edge)} edge</span></span></div></article>`).join('');
     bind($('picks'));
   }
 
@@ -380,11 +417,52 @@ function render(){
         <div class="pp"><b>Over ${p.line}</b> ${esc(p.market.toLowerCase())}</div><div class="mut">${matchup(p)}</div></div>
       ${mini(st,p.line)}
       ${ring(st.pct)}
-      <div class="foot2"><span>${st.hits} of ${st.n} games over</span><span><b style="color:var(--tx)">${fmtOdds(p.odds)}</b> <span class="edge" style="color:${st.edge>=0?'var(--hit)':'var(--miss)'}">${sgn(st.edge)} edge</span></span></div>
+      <div class="foot2"><span>${st.hits} of ${st.n} games over</span><span><b style="color:var(--tx)">${fmtOdds(p.odds)}</b>${bkTag(p)} <span class="edge" style="color:${st.edge>=0?'var(--hit)':'var(--miss)'}">${sgn(st.edge)} edge</span></span></div>
       <button class="star" data-save="${esc(p.id)}" aria-pressed="${saved}" aria-label="${saved?'Remove from':'Save to'} slip">${starSvg}</button></article>`}).join('');
   bind($('grid'));
 }
 
+const dayLabel=d=>new Date(d+'T12:00:00').toLocaleDateString([],{weekday:'long',month:'short',day:'numeric'});
+function resRow(x){
+  const cls=x.res==='hit'?'ok':x.res==='miss'?'no':'wait',sym=x.res==='hit'?'✓':x.res==='miss'?'✕':'…';
+  const lab=x.res==='hit'?'Hit':x.res==='miss'?'Missed':'Waiting for the game';
+  return `<div class="res"><i class="${cls}" role="img" aria-label="${lab}">${sym}</i>
+    <div><b>${esc(x.player)}</b><div class="mut">Over ${esc(x.line)} ${esc(String(x.market).toLowerCase())}, ${esc(x.team)} ${x.home===false?'@':'vs'} ${esc(x.opp)}</div></div>
+    <div style="text-align:right"><b>${x.res&&x.act!=null?'Got '+esc(x.act):esc(fmtTime(x.start))}</b><div class="mut">${fmtOdds(x.odds)}${x.book?' '+esc(shortBook(x.book)):''}</div></div></div>`;
+}
+function renderRecord(){
+  const el=$('record');
+  if(!HIST){el.innerHTML='<div class="card">Loading the track record...</div>';return}
+  const all=HIST.picks.filter(x=>x&&typeof x==='object'&&x.k),graded=all.filter(x=>x.res==='hit'||x.res==='miss'),pending=all.filter(x=>!x.res);
+  const cut=S.recWin?Date.now()-S.recWin*864e5:0,win=graded.filter(x=>new Date(x.start).getTime()>=cut);
+  const hits=win.filter(x=>x.res==='hit').length,n=win.length,pct=n?Math.round(hits/n*100):0;
+  const imp=n?win.reduce((t,x)=>t+implied(x.odds),0)/n:0;
+  const winBtns=[[7,'7 days'],[30,'30 days'],[0,'All time']].map(([d,l])=>`<button class="chip${d===S.recWin?' on':''}" aria-pressed="${d===S.recWin}" data-w="${d}">${l}</button>`).join('');
+  let h=`<div><h2>Track record</h2><div class="mut">Top picks are logged before the game starts and graded from official game logs afterwards. Misses stay in.</div></div>`;
+  if(!n){
+    h+=`<div class="card">${HISTERR?'The track record could not load ('+esc(HISTERR)+'). Try again in a few minutes.':all.length?`${pending.length} ${pending.length===1?'pick is':'picks are'} logged and waiting for the games to finish. Results show up after the next data update.`:'Tracking starts with the next data update. Each day\'s top picks are logged before game time, then graded once the games finish.'}</div>`;
+  }else{
+    const sp=Object.entries(SPORTS).map(([k,l])=>{const z=win.filter(x=>x.sport===k);return z.length?`<div><span class="mut">${l}</span><b>${z.filter(x=>x.res==='hit').length} of ${z.length}</b></div>`:''}).join('');
+    h+=`<div class="rec-top">${ring(pct).replace('class="ring"','class="ring xl"').replace('--c:'+rateColor(pct),'--c:'+(pct>=imp?'var(--hit)':'var(--miss)'))}<div><div style="font:800 26px/1.1 'Bricolage Grotesque',sans-serif">${hits} of ${n} picks hit</div><div class="mut">The odds on these picks implied about ${Math.round(imp)}%.</div></div><div class="rec-win" style="margin-left:auto">${winBtns}</div></div>`;
+    if(sp)h+=`<div class="rec-sp">${sp}</div>`;
+    const lastDay=graded.map(x=>x.day).sort().pop(),last=graded.filter(x=>x.day===lastDay);
+    h+=`<div><h2>Latest results</h2><div class="mut">${esc(dayLabel(lastDay))}, ${last.filter(x=>x.res==='hit').length} of ${last.length} hit</div></div><div class="reslist">${last.slice(0,16).map(resRow).join('')}</div>`;
+  }
+  const up=pending.filter(x=>new Date(x.start).getTime()>Date.now()-864e5).slice(0,12);
+  if(up.length)h+=`<div><h2>Logged, waiting for results</h2></div><div class="reslist">${up.map(resRow).join('')}</div>`;
+  h+=`<div class="mut">A pick is logged the first time it ranks in a sport's top 8 for that day, using the L5 sample and the best price at the time. Picks where the player did not play are left out. Small samples swing a lot, and a past hit rate does not predict the next game.</div>`;
+  el.innerHTML=h;
+  el.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>{S.recWin=+b.dataset.w;renderRecord()});
+}
+async function loadHist(){
+  try{
+    const r=await fetch('history.json',{cache:'no-store'});
+    if(r.status===404)HIST={picks:[]};
+    else if(!r.ok)throw new Error('HTTP '+r.status);
+    else{const d=await r.json();HIST={picks:Array.isArray(d.picks)?d.picks:[]}}
+  }catch(e){HIST={picks:[]};HISTERR=e.message}
+  if(S.tab==='rec')render();
+}
 function toggle(id){
   const i=S.slip.indexOf(id);i>-1?S.slip.splice(i,1):S.slip.push(id);saveSlip();
 }
@@ -409,7 +487,11 @@ function drawModal(){
   $('mWhy').innerHTML=why(p,S.split,line).map(t=>'<li>'+esc(t)+'</li>').join('');
   $('mCtx').innerHTML=`<div><b>Next game:</b> ${p.home?'vs':'@'} ${esc(p.opp)}, ${esc(fmtTime(p.start))}</div><div><b>${esc(p.player)}:</b> ${esc(p.injury.self||'No injury listed')}</div><div><b>${esc(p.team)} out:</b> ${esc(p.injury.team.join(', ')||'None listed')}</div><div><b>${esc(p.opp)} out:</b> ${esc(p.injury.opp.join(', ')||'None listed')}</div>`;
   const safe=u=>/^https:\/\//.test(u||'')?u:null;
-  $('mBooks').innerHTML=p.books.slice(0,8).map(b=>`<div class="row"><span><b>${esc(b.book)}:</b> Over ${b.line} (${fmtOdds(b.odds)})</span>${safe(b.link)?`<a class="btn" style="padding:6px 10px;min-height:36px;display:inline-flex;align-items:center;text-decoration:none;color:inherit;white-space:nowrap" href="${esc(b.link)}" target="_blank" rel="noopener noreferrer nofollow" aria-label="Open ${esc(b.book)} event page">Open game</a>`:''}</div>`).join('')+'<div class="mut" style="margin-top:6px">Links open the sportsbook\'s game page, not a bet slip. 19+ in Ontario. Please gamble responsibly.</div>';
+  const pr=price(p),dsort=(a,b)=>dec(b.odds)-dec(a.odds);
+  const at=p.books.filter(b=>b.line===p.line).sort(dsort),oth=p.books.filter(b=>b.line!==p.line).sort((a,b)=>a.line-b.line||dsort(a,b));
+  const bookRow=(b,tag)=>`<div class="brow"><span><b>${esc(b.book)}:</b> Over ${b.line} (${fmtOdds(b.odds)})${tag||''}</span>${safe(b.link)?`<a class="btn" style="padding:6px 10px;min-height:36px;display:inline-flex;align-items:center;text-decoration:none;color:inherit;white-space:nowrap" href="${esc(b.link)}" target="_blank" rel="noopener noreferrer nofollow" aria-label="Open ${esc(b.book)} event page">Open game</a>`:''}</div>`;
+  const sum=!pr.best?'':pr.ref?'Only a reference line is listed, so there is no bettable price to compare.':pr.n>=2?`<div><b>Best price:</b> ${fmtOdds(pr.best.odds)} at ${esc(pr.best.book)}, ${pr.gain.toFixed(1)} points of implied chance better than the average of ${pr.n} books at ${p.line}.</div>`:`<div><b>Only ${esc(pr.best.book)}</b> lists Over ${p.line}, so there is nothing to compare yet.</div>`;
+  $('mBooks').innerHTML=sum+at.slice(0,10).map(b=>bookRow(b,REF.test(b.book)?' <span class="tag ref" title="Shown for comparison only">Reference line</span>':(b===pr.best&&pr.n>=2?' <span class="tag best">Best price</span>':''))).join('')+(oth.length?'<div class="mut" style="margin-top:4px">Other lines</div>'+oth.slice(0,6).map(b=>bookRow(b,'')).join(''):'')+'<div class="mut" style="margin-top:6px">Links open the sportsbook\'s game page, not a bet slip. 19+ in Ontario. Please gamble responsibly.</div>';
   const saved=S.slip.includes(p.id);$('mSave').textContent=saved?'Remove from slip':'Add to slip';
   if(typeof Chart==='undefined')return;
   const css=getComputedStyle(document.documentElement),c=n=>css.getPropertyValue(n).trim();
@@ -459,7 +541,7 @@ async function load(){
     if(!r.ok)throw new Error('Data file not found yet. Run the Build data and deploy workflow once.');
     const d=await r.json();
     if(!d.props||!d.props.length)throw new Error('No props available right now. '+(d.errors||[]).join(' '));
-    DB=d.props;UPDATED=new Date(d.updated);stamp();
+    DB=d.props;UPDATED=new Date(d.updated);stamp();loadHist();
     if(!DB.some(p=>p.sport===S.sport))S.sport=DB[0].sport;
   }catch(e){ERR=e.message;render();return}
   render();
