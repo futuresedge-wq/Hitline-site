@@ -27,6 +27,10 @@ const MARKETS = {
     player_rush_yds: ['Rushing yards', 'rushing_yards'], player_reception_yds: ['Receiving yards', 'receiving_yards'], player_receptions: ['Receptions', 'receptions'],
     player_pass_yds: ['Passing yards', 'passing_yards'], player_rush_attempts: ['Rush attempts', 'carries'],
     player_pass_tds: ['Passing TDs', 'passing_tds'], player_anytime_td: ['Touchdowns', 'tds'], player_2plus_td: ['Touchdowns', 'tds'] } },
+  ncaaf: { key: 'americanfootball_ncaaf', espn: 'football/college-football', list: {
+    player_pass_yds: ['Passing yards', 'py'], player_pass_tds: ['Passing TDs', 'ptd'], player_rush_yds: ['Rushing yards', 'ry'],
+    player_reception_yds: ['Receiving yards', 'rcy'], player_receptions: ['Receptions', 'rec'],
+    player_anytime_td: ['Touchdowns', 'td'], player_2plus_td: ['Touchdowns', 'td'] } },
 };
 const NFL = { 'Arizona Cardinals':'ARI','Atlanta Falcons':'ATL','Baltimore Ravens':'BAL','Buffalo Bills':'BUF','Carolina Panthers':'CAR','Chicago Bears':'CHI','Cincinnati Bengals':'CIN','Cleveland Browns':'CLE','Dallas Cowboys':'DAL','Denver Broncos':'DEN','Detroit Lions':'DET','Green Bay Packers':'GB','Houston Texans':'HOU','Indianapolis Colts':'IND','Jacksonville Jaguars':'JAX','Kansas City Chiefs':'KC','Las Vegas Raiders':'LV','Los Angeles Chargers':'LAC','Los Angeles Rams':'LA','Miami Dolphins':'MIA','Minnesota Vikings':'MIN','New England Patriots':'NE','New Orleans Saints':'NO','New York Giants':'NYG','New York Jets':'NYJ','Philadelphia Eagles':'PHI','Pittsburgh Steelers':'PIT','San Francisco 49ers':'SF','Seattle Seahawks':'SEA','Tampa Bay Buccaneers':'TB','Tennessee Titans':'TEN','Washington Commanders':'WAS' };
 const lev = (a, b) => {
@@ -35,6 +39,7 @@ const lev = (a, b) => {
   for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
   return d[a.length][b.length];
 };
+const LOGOS = {};
 const DEBUG = {}; // shown in /api/props to help diagnose missing games
 const ANYTIME = new Set(['player_goals', 'player_anytime_td', 'batter_home_runs']); // anytime-scorer prices are over 0.5
 const ab = (t) => (t === 'LAR' ? 'LA' : t);
@@ -42,7 +47,7 @@ const ab = (t) => (t === 'LAR' ? 'LA' : t);
 const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/-/g, ' ').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim().replace(/ (jr|sr|ii|iii|iv)$/, '');
 const md = (d) => { const [, m, x] = d.split('-'); return `${+m}/${+x}`; };
 const sleep = (ms) => new Promise((z) => setTimeout(z, ms));
-const GAP = { 'api-web.nhle.com': 250 }; // minimum ms between requests per host
+const GAP = { 'api-web.nhle.com': 250, 'api.collegefootballdata.com': 300 }; // minimum ms between requests per host
 const lastHit = {};
 async function gap(url) {
   let h; try { h = new URL(url).host; } catch { return; }
@@ -52,18 +57,18 @@ async function gap(url) {
   if (wait) await sleep(wait);
 }
 // Retries rate-limited (429) requests, honouring Retry-After
-const getText = async (url) => {
+const getText = async (url, headers) => {
   for (let i = 0; ; i++) {
     let r;
     await gap(url);
-    try { r = await fetch(url, { signal: AbortSignal.timeout(45000) }); }
+    try { r = await fetch(url, { headers, signal: AbortSignal.timeout(45000) }); }
     catch (e) { if (i < 3) { await sleep(1000 * (i + 1)); continue; } throw e; }
     if ((r.status === 429 || r.status >= 500) && i < 5) { await sleep(Math.min(Number(r.headers.get('retry-after')) || 3 * (i + 1), 30) * 1000); continue; }
     if (!r.ok) throw new Error(`${r.status} ${url.replace(/apiKey=[^&]+/, 'apiKey=***')}`);
     return r.text();
   }
 };
-const getJson = async (url) => JSON.parse(await getText(url));
+const getJson = async (url, headers) => JSON.parse(await getText(url, headers));
 async function pool(items, n, fn) {
   const out = []; let i = 0;
   await Promise.all(Array.from({ length: n }, async () => {
@@ -87,7 +92,7 @@ async function oddsProps(cfg, sport) {
   if (!key) throw new Error(`No odds API key set for ${sport} (set ${U}_ODDS_KEY or ODDS_API_KEY)`);
   const regions = process.env.ODDS_REGIONS || 'us', horizon = Number(process.env[`${U}_HORIZON_HOURS`] || process.env.HORIZON_HOURS || 36);
   const events = await getJson(`${base}/sports/${cfg.key}/events?apiKey=${key}`);
-  const soon = events.filter((e) => { const h = (new Date(e.commence_time) - Date.now()) / 36e5; return h > -1 && h < horizon; }).slice(0, Number(process.env.MAX_EVENTS || 50));
+  const soon = events.filter((e) => { const h = (new Date(e.commence_time) - Date.now()) / 36e5; return h > -1 && h < horizon; }).slice(0, Number(process.env[`${U}_MAX_EVENTS`] || process.env.MAX_EVENTS || 50));
   const only = (process.env.MARKETS || '').split(',').map((x) => x.trim()).filter(Boolean);
   const markets = Object.keys(cfg.list).filter((k) => !only.length || only.includes(k)).join(',');
   if (!markets) return [];
@@ -350,10 +355,109 @@ async function nfl(errors) {
   return warn('nfl', raw, out, errors);
 }
 
+// College football: lines from PropLine, stats from the College Football Data API (free key, CFBD_API_KEY).
+// Completed weeks never change, so each week's box scores are cached and only re-fetched when more games have finished.
+const CFBD = 'https://api.collegefootballdata.com';
+const tz = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto' }).format(new Date(iso));
+async function ncaaf(errors) {
+  const cfg = MARKETS.ncaaf, raw = await oddsProps(cfg, 'ncaaf');
+  if (!raw.length) return [];
+  const key = process.env.CFBD_API_KEY;
+  if (!key) throw new Error('CFBD_API_KEY is not set (free key from collegefootballdata.com)');
+  const H = { Authorization: `Bearer ${key}`, Accept: 'application/json' };
+  const now = new Date(), y = now.getFullYear(), season = now.getMonth() >= 7 ? y : y - 1;
+  const D = (DEBUG.ncaafApi = { calls: 0, cached: 0 });
+  const api = async (path) => { D.calls++; return getJson(`${CFBD}${path}`, H); };
+  const fresh = (c, hrs) => c && Date.now() - c.t < hrs * 36e5;
+  const pick = (o, ...ks) => { for (const k of ks) if (o && o[k] != null) return o[k]; return undefined; };
+
+  // Teams (names, abbreviations and ESPN logo ids), cached for 30 days
+  let tk = `cfb:teams:${season}`, teams = LOGS[tk] && fresh(LOGS[tk], 720) ? LOGS[tk].rows : null;
+  if (!teams) { try { teams = (await api(`/teams/fbs?year=${season}`)).map((t) => ({ id: t.id, school: t.school, abbr: t.abbreviation || String(t.school).slice(0, 4).toUpperCase() })); LOGS[tk] = { t: Date.now(), rows: teams }; } catch (e) { teams = LOGS[tk] ? LOGS[tk].rows : []; errors.push(`ncaaf: teams list failed (${e.message})`); } } else D.cached++;
+  const bySchool = new Map(teams.map((t) => [norm(t.school), t]));
+
+  // Season schedule, cached for 6 hours
+  const sk = `cfb:sched:${season}`; let sched = LOGS[sk] && fresh(LOGS[sk], 6) ? LOGS[sk].rows : null;
+  if (!sched) {
+    try {
+      const g = await api(`/games?year=${season}&seasonType=regular`);
+      if (!DEBUG.ncaafSampleGameKeys) DEBUG.ncaafSampleGameKeys = Object.keys(g[0] || {});
+      sched = g.map((x) => ({ id: x.id, week: x.week, start: pick(x, 'startDate', 'start_date'), home: pick(x, 'homeTeam', 'home_team'), away: pick(x, 'awayTeam', 'away_team'), done: !!(pick(x, 'completed') || pick(x, 'homePoints', 'home_points') != null) }));
+      LOGS[sk] = { t: Date.now(), rows: sched };
+    } catch (e) { sched = LOGS[sk] ? LOGS[sk].rows : []; errors.push(`ncaaf: schedule failed (${e.message})`); }
+  } else D.cached++;
+  const info = new Map(sched.map((g) => [g.id, g]));
+
+  // Box scores per completed week: one row per player per game
+  const weeks = [...new Set(sched.filter((g) => g.done).map((g) => g.week))].sort((a, b) => a - b);
+  const players = []; // {name, school, opp, home, date, py, ptd, ry, rtd, rec, rcy, rctd}
+  for (const wk of weeks) {
+    const done = sched.filter((g) => g.week === wk && g.done).length, ck = `cfb:wk:${season}:${wk}`, c = LOGS[ck];
+    let rows = c && c.done >= done ? c.rows : null;
+    if (!rows && Date.now() - START > budgetMs()) { rows = c ? c.rows : []; }
+    if (!rows) {
+      try {
+        const data = await api(`/games/players?year=${season}&week=${wk}&seasonType=regular`);
+        if (!DEBUG.ncaafSamplePlayers) DEBUG.ncaafSamplePlayers = { games: data.length, firstGameKeys: Object.keys(data[0] || {}), firstTeamKeys: Object.keys((data[0] && data[0].teams && data[0].teams[0]) || {}), categories: ((data[0] && data[0].teams && data[0].teams[0] && data[0].teams[0].categories) || []).map((k) => `${k.name}:${(k.types || []).map((t) => t.name).join('/')}`) };
+        rows = [];
+        for (const gm of data) {
+          const g = info.get(gm.id); if (!g) continue;
+          const tms = gm.teams || [], acc = new Map();
+          for (const tm of tms) for (const cat of tm.categories || []) for (const ty of cat.types || []) for (const a of ty.athletes || []) {
+            const k = `${tm.team}|${pick(a, 'id') ?? a.name}`, o = acc.get(k) || { name: a.name, school: tm.team, opp: tms.find((z) => z !== tm)?.team, home: pick(tm, 'homeAway', 'home_away') === 'home' };
+            const v = parseFloat(a.stat); if (!Number.isFinite(v)) { acc.set(k, o); continue; }
+            const f = { passing: { YDS: 'py', TD: 'ptd' }, rushing: { YDS: 'ry', TD: 'rtd' }, receiving: { REC: 'rec', YDS: 'rcy', TD: 'rctd' } }[cat.name]?.[ty.name];
+            if (f) o[f] = v;
+            acc.set(k, o);
+          }
+          for (const o of acc.values()) rows.push({ ...o, date: tz(g.start) });
+        }
+        LOGS[ck] = { t: Date.now(), done, rows };
+      } catch (e) { rows = c ? c.rows : []; const L = (DEBUG.logErrors = DEBUG.logErrors || []); if (L.length < 10) L.push(`ncaaf week ${wk}: ${e.message}`); }
+    } else D.cached++;
+    players.push(...rows);
+  }
+  const by = new Map();
+  for (const r of players) { const k = `${norm(r.name)}|${norm(r.school)}`; if (!by.has(k)) by.set(k, []); by.get(k).push(r); }
+  for (const v of by.values()) v.sort((a, b) => b.date.localeCompare(a.date));
+  DEBUG.ncaafStats = { season, weeksLoaded: weeks.length, playerRows: players.length, players: by.size };
+
+  // PropLine uses full names ("Alabama Crimson Tide"); CFBD uses the school ("Alabama"). Longest school name that prefixes the full name wins.
+  const cands = (full) => { const n = norm(full); return [...bySchool].filter(([s]) => n === s || n.startsWith(s + ' ')).map(([, t]) => t); };
+  // "Miami RedHawks" is "Miami (OH)" in CFBD, so names alone can fail. The scheduled game (within a day and a half) settles it:
+  // both teams matching is best, otherwise one matching team is enough when that team has a single game in the window.
+  const pair = (e) => {
+    const hs = cands(e.home_team), as = cands(e.away_team), t0 = new Date(e.commence_time).getTime();
+    const near = sched.filter((x) => Math.abs(new Date(x.start).getTime() - t0) < 36e5 * 36), has = (l, nm) => l.some((t) => norm(t.school) === norm(nm));
+    let g = near.find((x) => has(hs, x.home) && has(as, x.away));
+    if (!g) { const m = near.filter((x) => has(hs, x.home) || has(as, x.away)); if (m.length === 1) g = m[0]; }
+    const T = (nm) => bySchool.get(norm(nm));
+    return g && T(g.home) && T(g.away) ? [T(g.home), T(g.away)] : [school(e.home_team), school(e.away_team)];
+  };
+  const school = (full) => { const n = norm(full); let best = null; for (const [s, t] of bySchool) if ((n === s || n.startsWith(s + ' ')) && (!best || s.length > best[0].length)) best = [s, t]; return best && best[1]; };
+  const abbrOf = (sc) => (bySchool.get(norm(sc)) || { abbr: String(sc).slice(0, 4).toUpperCase() }).abbr;
+  const drops = { noTeam: [], noStats: [], shortLog: [] };
+  const out = raw.map((r) => {
+    const e = r.event, [ht, at] = pair(e);
+    if (!ht || !at) { drops.noTeam.push(`${e.away_team} @ ${e.home_team}`); return null; }
+    const n = norm(r.player), hl = by.get(`${n}|${norm(ht.school)}`), al = by.get(`${n}|${norm(at.school)}`), list = hl || al;
+    if (!list) { drops.noStats.push(r.player); return null; }
+    const side = hl ? 'home' : 'away', mine = side === 'home' ? ht : at, theirs = side === 'home' ? at : ht, stat = cfg.list[r.mkey][1];
+    const val = (x) => (stat === 'td' ? (x.rtd || 0) + (x.rctd || 0) : x[stat] || 0);
+    const g = list.slice(0, 20).map((x) => ({ v: val(x), opp: abbrOf(x.opp), home: x.home, date: md(x.date) }));
+    if (g.length < 5) { drops.shortLog.push(r.player); return null; }
+    return assemble('ncaaf', r, g, mine.abbr, theirs.abbr, side === 'home', {}, mine.school, theirs.school);
+  }).filter(Boolean);
+  DEBUG.ncaafDropped = { noTeam: [...new Set(drops.noTeam)].slice(0, 15), noStats: [...new Set(drops.noStats)].slice(0, 15), shortLog: [...new Set(drops.shortLog)].slice(0, 15) };
+  const logos = {}; for (const t of teams) logos[t.abbr] = t.id;
+  LOGOS.ncaaf = logos;
+  return warn('ncaaf', raw, out, errors);
+}
+
 export async function build() {
   START = Date.now();
-  const out = { updated: new Date().toISOString(), props: [], errors: [], debug: DEBUG };
-  for (const [sport, fn] of [['nhl', nhl], ['nfl', nfl], ['mlb', mlb]].filter(([sp]) => (process.env.SPORTS || 'nhl,nfl,mlb').includes(sp))) {
+  const out = { updated: new Date().toISOString(), props: [], errors: [], debug: DEBUG, logos: LOGOS };
+  for (const [sport, fn] of [['nhl', nhl], ['nfl', nfl], ['mlb', mlb], ['ncaaf', ncaaf]].filter(([sp]) => (process.env.SPORTS || 'nhl,nfl,mlb').split(',').map((x) => x.trim()).includes(sp))) {
     START = Date.now(); CUR = sport; // each sport gets its own time budget so one cannot starve the next
     try { out.props.push(...(await fn(out.errors))); } catch (e) { out.errors.push(`${sport}: ${e.message}`); }
   }
