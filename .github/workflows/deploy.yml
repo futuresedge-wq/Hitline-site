@@ -35,7 +35,7 @@ jobs:
         run: node scripts/build-data.mjs
         env:
           HISTORY_URL: ${{ steps.pages.outputs.base_url }}/history.json
-          SPORTS: nhl,nfl,mlb
+          SPORTS: nhl,nfl,mlb,ncaaf
           BUILD_MINUTES: 8
           NHL_ODDS_BASE_URL: https://api.prop-line.com/v1
           NHL_ODDS_KEY: ${{ secrets.NHL_ODDS_KEY }}
@@ -44,6 +44,11 @@ jobs:
           NFL_HORIZON_HOURS: 96
           MLB_ODDS_BASE_URL: https://api.prop-line.com/v1
           MLB_ODDS_KEY: ${{ secrets.NHL_ODDS_KEY }}
+          NCAAF_ODDS_BASE_URL: https://api.prop-line.com/v1
+          NCAAF_ODDS_KEY: ${{ secrets.NHL_ODDS_KEY }}
+          NCAAF_HORIZON_HOURS: 48
+          NCAAF_MAX_EVENTS: 20
+          CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
           MARKETS: player_goals,player_goals_2plus,player_shots_on_goal,player_blocked_shots,player_points_1plus,player_points_2plus,player_points_3plus,goalie_saves,player_pass_yds,player_pass_tds,player_rush_yds,player_reception_yds,player_receptions,player_anytime_td,player_2plus_td,batter_hits,batter_total_bases,batter_home_runs,batter_rbis,batter_runs_scored,batter_hits_runs_rbis,pitcher_strikeouts,pitcher_outs
           BOOKS: draftkings,fanduel,betmgm,betrivers,hardrock,pinnacle,betway
       - uses: actions/upload-pages-artifact@v3
