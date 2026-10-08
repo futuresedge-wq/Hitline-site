@@ -42,6 +42,20 @@ button,select,input{font:inherit;color:inherit}
 #upd::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--hit);margin-right:6px;vertical-align:1px}
 
 /* top picks */
+.games{margin:14px 0 0;display:flex;gap:8px;padding-bottom:2px}
+.games[hidden]{display:none}
+.gchip{flex:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 14px;cursor:pointer;color:var(--mut);text-align:left;display:flex;flex-direction:column;line-height:1.25;min-height:46px;justify-content:center}
+.gchip b{color:var(--tx);font-weight:700}
+.gchip span{font-size:12px}
+.gchip.on{background:var(--acc);border-color:var(--acc);color:var(--onacc)}
+.gchip.on b{color:var(--onacc)}
+.gchip:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.tl{display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;border-radius:50%;background:#eef2ea;vertical-align:middle;margin-right:5px}
+.tl img{width:16px;height:16px;object-fit:contain;display:block}
+.tl.lg{width:42px;height:42px;margin-right:0}.tl.lg img{width:32px;height:32px}
+.gchip b{display:flex;align-items:center;white-space:nowrap}
+.gchip b .tl{width:20px;height:20px;margin-right:4px}.gchip b .tl img{width:14px;height:14px}
+.mhead{display:flex;align-items:center;gap:12px}
 #picksBox{margin:14px 0 6px}
 #picksBox[hidden]{display:none}
 .pk-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 10px;margin-bottom:8px}
@@ -155,6 +169,8 @@ button,select,input{font:inherit;color:inherit}
 
   <div class="seg" id="tabs" role="tablist" aria-label="View"></div>
 
+  <div class="games scroll" id="games" hidden aria-label="Games"></div>
+
   <section id="picksBox" hidden aria-label="Top picks">
     <div class="pk-head"><h2>Top picks</h2><span class="mut" id="pkNote"></span></div>
     <div class="picks" id="picks"></div>
@@ -222,7 +238,7 @@ function why(p,split,line){
   return out;
 }
 
-const S={market:'all',sport:'nhl',tab:'cheat',split:'l5',minHit:0,sort:'hit',q:'',slip:[],modal:null,mline:0};
+const S={game:'all',market:'all',sport:'nhl',tab:'cheat',split:'l5',minHit:0,sort:'hit',q:'',slip:[],modal:null,mline:0};
 try{S.slip=JSON.parse(localStorage.getItem('hitline-slip')||'[]')}catch(e){}
 try{
   const pr=JSON.parse(localStorage.getItem('hitline-prefs')||'{}');
@@ -267,11 +283,20 @@ function mini(st,line){
 }
 const ring=pct=>`<div class="ring" style="--p:${pct};--c:${rateColor(pct)}" role="img" aria-label="${pct} percent hit rate"><b>${pct}%</b></div>`;
 const starSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.5l6-.8z"/></svg>';
-const matchup=p=>`${esc(p.team)} ${p.home?'vs':'@'} ${esc(p.opp)}`;
+const LOGO={nhl:{LAK:'la',NJD:'nj',SJS:'sj',TBL:'tb',UTA:'utah'},nfl:{LA:'lar',LAR:'lar',WAS:'wsh'},mlb:{AZ:'ari',CWS:'chw'}};
+// Team logos come from ESPN's public image host. If one fails to load, it simply disappears.
+const logo=(sport,abbr,big)=>{
+  if(!SPORTS[sport]||!/^[A-Za-z]{2,4}$/.test(abbr||''))return '';
+  const A=abbr.toUpperCase(),slug=(LOGO[sport]&&LOGO[sport][A])||A.toLowerCase(),alt=sport==='mlb'&&A==='ATH'?'oak':'';
+  const u=x=>`https://a.espncdn.com/i/teamlogos/${sport}/500/${x}.png`;
+  return `<span class="tl${big?' lg':''}"><img src="${u(slug)}"${alt?` data-alt="${u(alt)}"`:''} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="if(this.dataset.alt){this.src=this.dataset.alt;delete this.dataset.alt}else this.parentNode.remove()"></span>`;
+};
+const matchup=p=>`${logo(p.sport,p.team)}${esc(p.team)} ${p.home?'vs':'@'} ${logo(p.sport,p.opp)}${esc(p.opp)}`;
 
+const gameKey=p=>p.sport+'|'+String(p.start).slice(0,16)+'|'+[p.team,p.opp].sort().join('|');
 function topPicks(){
   const seen=new Set();
-  return DB.filter(p=>p.sport===S.sport).map(p=>({p,st:stats(p,S.split,p.line)}))
+  return DB.filter(p=>p.sport===S.sport&&(S.game==='all'||gameKey(p)===S.game)).map(p=>({p,st:stats(p,S.split,p.line)}))
     .filter(({st})=>st.n>=5&&st.pct>=80&&st.edge>0)
     .sort((a,b)=>b.st.edge-a.st.edge||b.st.n-a.st.n)
     .filter(({p})=>!seen.has(p.player)&&seen.add(p.player)).slice(0,8);
@@ -303,6 +328,19 @@ function render(){
   if(!mk.includes(S.market))S.market='all';
   $('mkts').innerHTML=mk.map(k=>`<button class="chip${k===S.market?' on':''}" aria-pressed="${k===S.market}" data-m="${esc(k)}">${k==='all'?'All markets':esc(k)}</button>`).join('');
   $('mkts').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.market=b.dataset.m;render()});
+  // game chips: one per matchup for the chosen sport, earliest first
+  const gm=new Map();
+  DB.filter(p=>p.sport===S.sport).forEach(p=>{const k=gameKey(p);if(!gm.has(k))gm.set(k,{k,t:new Date(p.start).getTime()||0,away:p.home?p.opp:p.team,home:p.home?p.team:p.opp,start:p.start})});
+  const games=[...gm.values()].sort((a,b)=>a.t-b.t);
+  if(S.game!=='all'&&!gm.has(S.game))S.game='all';
+  const showG=S.tab!=='slip'&&games.length>1;
+  if(!showG&&S.tab!=='slip')S.game='all';
+  $('games').hidden=!showG;
+  if(showG){
+    $('games').innerHTML=`<button class="gchip${S.game==='all'?' on':''}" aria-pressed="${S.game==='all'}" data-g="all"><b>All games</b><span>${games.length} games</span></button>`+
+      games.map(g=>`<button class="gchip${g.k===S.game?' on':''}" aria-pressed="${g.k===S.game}" data-g="${esc(g.k)}"><b>${logo(S.sport,g.away)}${esc(g.away)}&nbsp;@&nbsp;${logo(S.sport,g.home)}${esc(g.home)}</b><span>${esc(fmtTime(g.start))}</span></button>`).join('');
+    $('games').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.game=b.dataset.g;render()});
+  }
   const label=SPLITS.find(s=>s[0]===S.split)[1];
 
   // top picks: best edge for this sport and sample. Hidden on My slip and while searching.
@@ -322,6 +360,7 @@ function render(){
   let list=DB.filter(p=>{
     if(S.tab==='slip'){if(!S.slip.includes(p.id))return false}
     else if(p.sport!==S.sport)return false;
+    if(S.tab!=='slip'&&S.game!=='all'&&gameKey(p)!==S.game)return false;
     if(S.market!=='all'&&p.market!==S.market)return false;
     const st=stats(p,S.split,p.line);
     if(!st.n)return false;
@@ -353,7 +392,7 @@ function toggle(id){
 let chart=null,lastFocus=null;
 function openModal(id){
   S.modal=DB.find(p=>p.id===id);if(!S.modal)return;S.mline=S.modal.line;lastFocus=document.activeElement;
-  $('mHead').innerHTML=`<h2 id="mTitle" style="font-size:22px">${esc(S.modal.player)}</h2><div class="mut">${esc(S.modal.team)} · Over ${S.modal.line} ${esc(S.modal.market.toLowerCase())} (${fmtOdds(S.modal.odds)})</div>`;
+  $('mHead').innerHTML=`<div class="mhead">${logo(S.modal.sport,S.modal.team,true)}<div><h2 id="mTitle" style="font-size:22px">${esc(S.modal.player)}</h2><div class="mut">${esc(S.modal.team)} · Over ${S.modal.line} ${esc(S.modal.market.toLowerCase())} (${fmtOdds(S.modal.odds)})</div></div></div>`;
   document.documentElement.style.overflow='hidden';$('modal').classList.add('open');drawModal();$('mClose').focus();
 }
 function closeModal(){
