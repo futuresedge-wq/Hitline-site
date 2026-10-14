@@ -151,6 +151,33 @@ button,select,input{font:inherit;color:inherit}
 .why{margin:0;padding:0;list-style:none;display:grid;gap:5px;font-size:13px}.why li::before{content:'• ';color:var(--acc)}.ctx{border:1px solid var(--line);border-radius:10px;padding:10px;display:grid;gap:4px;font-size:13px}.ctx b{color:var(--tx)}h4{margin:14px 0 6px;font:700 14px 'Bricolage Grotesque',sans-serif}
 .foot{color:var(--mut);font-size:12px;margin:28px 0 8px;border-top:1px solid var(--line);padding-top:14px}
 
+/* games tab */
+.gcards{display:grid;gap:12px;margin-top:14px}
+.gday{font:700 13px 'Bricolage Grotesque',sans-serif;color:var(--mut);margin:10px 0 -2px;text-transform:uppercase;letter-spacing:.05em}
+.gc{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.gc-h{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.gc-t{font-weight:700;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.ot{display:grid;grid-template-columns:minmax(44px,.7fr) repeat(3,minmax(0,1.3fr));gap:6px;align-items:center;font-size:13px}
+.ot .h{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.05em;text-align:center}
+.ot .tm{font-weight:700;display:flex;align-items:center;gap:4px}
+.oc{border:1px solid var(--line);border-radius:9px;padding:6px 3px;text-align:center;line-height:1.25;min-width:0}
+.oc b{display:block;font-weight:700}.oc small{color:var(--mut);font-size:11px}
+.oc.na{color:var(--mut)}
+.gc-f{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.gc-f .sp{flex:1}
+.fair{height:8px;border-radius:99px;background:var(--line);overflow:hidden;display:flex;margin:10px 0 2px}
+.fair i{display:block;height:100%}
+.mt{display:grid;grid-template-columns:minmax(0,1fr) minmax(88px,1.1fr) minmax(0,1fr);font-size:13px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.mt>div{padding:7px 8px;border-top:1px solid var(--line);min-width:0;overflow-wrap:anywhere}
+.mt>div:nth-child(-n+3){border-top:0}
+.mt .lb{color:var(--mut);text-align:center;font-size:12px}
+.mt .v{text-align:center}.mt .v small{color:var(--mut);margin-left:3px}
+.mt .v.ed{color:var(--hit);font-weight:700;background:color-mix(in srgb,var(--hit) 10%,transparent)}
+.mt .hd{font-weight:700;text-align:center;display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap}
+.fm{display:inline-flex;width:22px;height:22px;border-radius:6px;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:3px;background:var(--line);color:var(--tx)}
+.fm.W{background:var(--hit);color:var(--onacc)}.fm.L{background:var(--miss);color:var(--onmiss)}
+.lines3{display:grid;gap:10px}
+
 /* tabs: desktop in the filter bar, bottom bar on phones */
 .topbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
 #tabs{display:inline-flex}
@@ -164,7 +191,7 @@ button,select,input{font:inherit;color:inherit}
   .sticky{margin:0 -12px;padding:8px 12px 6px}
   #sports{width:100%}#sports button{flex:1}
   #tabs{display:flex;margin:0;position:fixed;left:0;right:0;bottom:0;z-index:9;border-radius:0;border-width:1px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
-  #tabs button{flex:1;padding:12px 6px;min-height:48px}
+  #tabs button{flex:1;padding:12px 2px;min-height:48px;font-size:12.5px}
   .fa{flex-wrap:nowrap}
   #q{min-width:0}
   #picksBox{margin-top:12px}
@@ -197,6 +224,8 @@ button,select,input{font:inherit;color:inherit}
     <div class="seg" id="tabs" role="tablist" aria-label="View"></div>
   </div>
 
+  <section id="gcards" class="gcards" hidden aria-label="Games"></section>
+
   <div class="games scroll" id="games" hidden aria-label="Games"></div>
 
   <section id="picksBox" hidden aria-label="Top picks">
@@ -221,7 +250,7 @@ button,select,input{font:inherit;color:inherit}
   <div id="grid" class="list"></div>
   <section id="record" class="rec" hidden aria-label="Track record"></section>
 
-  <div class="foot">Hit rates describe past games and do not predict results. Stats come from the NHL, nflverse, MLB and College Football Data, lines from PropLine and injuries from ESPN, so they can lag official team reports. 19+ in Ontario. If gambling stops being fun, ConnexOntario offers free support at 1-866-531-2600.</div>
+  <div class="foot">Hit rates describe past games and do not predict results. Stats come from the NHL, nflverse, MLB and College Football Data, matchup notes are computed from those stats and are not predictions, lines from PropLine and injuries from ESPN, so they can lag official team reports. 19+ in Ontario. If gambling stops being fun, ConnexOntario offers free support at 1-866-531-2600.</div>
 </div>
 
 <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
@@ -241,12 +270,19 @@ button,select,input{font:inherit;color:inherit}
   </div>
 </div>
 
+<div id="gmodal" class="modal" role="dialog" aria-modal="true" aria-labelledby="gTitle">
+  <div class="sheet">
+    <div class="row"><div id="gHead"></div><button class="btn" id="gClose" aria-label="Close">Close</button></div>
+    <div id="gBody"></div>
+  </div>
+</div>
+
 <script>
 const SPORTS={nhl:'NHL',nfl:'NFL',mlb:'MLB',ncaaf:'NCAAF'};
 let LOGOS={};
 const SPLITS=[['l5','L5'],['l10','L10'],['l20','L20'],['home','Home'],['away','Away']];
-const TABS=[['cheat','Cheatsheet'],['all','All props'],['rec','Record'],['slip','My slip']];
-let DB=[],ERR='',UPDATED=null,HIST=null,HISTERR='';
+const TABS=[['games','Games'],['cheat','Cheatsheet'],['all','All props'],['rec','Record'],['slip','My slip']];
+let GAMES=[],DB=[],ERR='',UPDATED=null,HIST=null,HISTERR='';
 const fmtTime=iso=>new Date(iso).toLocaleString([],{weekday:"short",hour:"numeric",minute:"2-digit"});
 
 function why(p,split,line){
@@ -267,7 +303,7 @@ function why(p,split,line){
   return out;
 }
 
-const S={recWin:30,game:'all',market:'all',sport:'nhl',tab:'cheat',split:'l5',minHit:0,sort:'hit',q:'',slip:[],modal:null,mline:0};
+const S={gm:null,recWin:30,game:'all',market:'all',sport:'nhl',tab:'cheat',split:'l5',minHit:0,sort:'hit',q:'',slip:[],modal:null,mline:0};
 try{S.slip=JSON.parse(localStorage.getItem('hitline-slip')||'[]')}catch(e){}
 try{
   const pr=JSON.parse(localStorage.getItem('hitline-prefs')||'{}');
@@ -364,6 +400,9 @@ function render(){
   savePrefs();
   $('sports').hidden=S.tab==='rec'||S.tab==='slip'; // both views span every sport
   $('minHit').value=String(S.minHit);$('sort').value=S.sort;
+  const isG=S.tab==='games';
+  $('gcards').hidden=!isG;
+  if(isG){['filters','banner','grid','record','picksBox','games'].forEach(id=>$(id).hidden=true);renderGames();return}
   const isRec=S.tab==='rec';
   $('filters').hidden=isRec;$('banner').hidden=isRec;$('grid').hidden=isRec;$('record').hidden=!isRec;
   if(isRec){$('picksBox').hidden=true;$('games').hidden=true;renderRecord();return}
@@ -534,6 +573,91 @@ $('minHit').onchange=e=>{S.minHit=+e.target.value;render()};
 $('sort').onchange=e=>{S.sort=e.target.value;render()};
 $('q').oninput=e=>{S.q=e.target.value;render()};
 
+/* ---------- Games tab: lines and matchup cards ---------- */
+const fl=n=>n>0?'+'+n:String(n);
+const dayHead=iso=>new Date(iso).toLocaleDateString([],{weekday:'long',month:'short',day:'numeric'});
+const safeUrl=u=>/^https:\/\//.test(u||'')?u:null;
+function oc(top,o){
+  if(!o)return '<div class="oc na">-</div>';
+  return `<div class="oc"><b>${top?esc(top)+' ':''}${fmtOdds(o.odds)}</b><small>${esc(shortBook(o.book))}</small></div>`;
+}
+const gamePropKey=g=>g.sport+'|'+String(g.start).slice(0,16)+'|'+[g.homeAbbr,g.awayAbbr].sort().join('|');
+function gameCard(g){
+  const sp=g.spread,tt=g.total,ml=g.ml,have=sp||tt||ml;
+  const nProps=g.homeAbbr?DB.filter(p=>gameKey(p)===gamePropKey(g)).length:0;
+  const ab=g.awayAbbr||'',hb=g.homeAbbr||'';
+  const tm=(a,n)=>`<div class="tm">${logo(g.sport,a)}${esc(a||n)}</div>`;
+  let h=`<article class="gc"><div class="gc-h"><div class="gc-t">${logo(g.sport,ab)}${esc(g.away)} <span class="mut">@</span> ${logo(g.sport,hb)}${esc(g.home)}</div><span class="mut">${esc(fmtTime(g.start))}</span></div>`;
+  if(have){
+    h+=`<div class="ot"><span></span><span class="h">Spread</span><span class="h">Moneyline</span><span class="h">Total</span>
+      ${tm(ab,g.away)}${sp?oc(fl(-sp.line),sp.away):'<div class="oc na">-</div>'}${ml?oc('',ml.away):'<div class="oc na">-</div>'}${tt?oc('O '+tt.line,tt.over):'<div class="oc na">-</div>'}
+      ${tm(hb,g.home)}${sp?oc(fl(sp.line),sp.home):'<div class="oc na">-</div>'}${ml?oc('',ml.home):'<div class="oc na">-</div>'}${tt?oc('U '+tt.line,tt.under):'<div class="oc na">-</div>'}</div>`;
+    if(ml&&ml.fair!=null)h+=`<div class="fair" role="img" aria-label="Market win chance ${100-ml.fair} percent ${esc(g.away)}, ${ml.fair} percent ${esc(g.home)}"><i style="width:${(100-ml.fair).toFixed(1)}%;background:var(--mut)"></i><i style="width:${ml.fair}%;background:var(--acc)"></i></div><div class="mut" style="font-size:12px;display:flex;justify-content:space-between"><span>${esc(ab||g.away)} ${(100-ml.fair).toFixed(0)}%</span><span>Market win chance, vig removed</span><span>${esc(hb||g.home)} ${ml.fair.toFixed(0)}%</span></div>`;
+  }else h+='<div class="mut">Lines are not posted yet.</div>';
+  h+=`<div class="gc-f"><button class="btn pri" data-gm="${esc(g.id)}">${g.matchup?'Matchup &amp; lines':'Lines by book'}</button>${nProps?`<button class="btn" data-gp="${esc(g.id)}">${nProps} player ${nProps===1?'prop':'props'}</button>`:''}</div></article>`;
+  return h;
+}
+function renderGames(){
+  const el=$('gcards'),list=GAMES.filter(g=>g.sport===S.sport&&new Date(g.start)>Date.now()-4*36e5);
+  if(!GAMES.length){el.innerHTML=ERR?`<div class="card">${esc(ERR)}</div>`:'<div class="sk"></div>'.repeat(3);return}
+  if(!list.length){el.innerHTML=`<div class="card" style="text-align:center">No ${esc(SPORTS[S.sport])} games with posted lines right now. Try another sport.</div>`;return}
+  let last='',h='';
+  for(const g of list){const d=dayHead(g.start);if(d!==last){h+=`<div class="gday">${esc(d)}</div>`;last=d}h+=gameCard(g)}
+  el.innerHTML=h+`<div class="mut" style="font-size:12px">Showing the best price across the books we track; Pinnacle is a reference line only. Prices move, so confirm on the sportsbook before betting.</div>`;
+  el.querySelectorAll('[data-gm]').forEach(b=>b.onclick=()=>openGame(b.dataset.gm));
+  el.querySelectorAll('[data-gp]').forEach(b=>b.onclick=()=>{const g=GAMES.find(x=>x.id===b.dataset.gp);if(!g)return;S.tab='all';S.game=gamePropKey(g);S.market='all';render();window.scrollTo(0,0)});
+}
+function bookLine(name,txt,link,tag){
+  return `<div class="brow"><span><b>${esc(name)}:</b> ${txt}${tag||''}</span>${safeUrl(link)?`<a class="btn" style="padding:6px 10px;min-height:36px;display:inline-flex;align-items:center;text-decoration:none;color:inherit;white-space:nowrap" href="${esc(link)}" target="_blank" rel="noopener noreferrer nofollow" aria-label="Open ${esc(name)} event page">Open game</a>`:''}</div>`;
+}
+const refTag=n=>REF.test(n)?' <span class="tag ref" title="Shown for comparison only">Reference line</span>':'';
+function openGame(id){
+  const g=GAMES.find(x=>x.id===id);if(!g)return;S.gm=g;lastFocus=document.activeElement;
+  const m=g.matchup,ab=g.awayAbbr||'',hb=g.homeAbbr||'';
+  $('gHead').innerHTML=`<div class="mhead">${logo(g.sport,hb,true)}<div><h2 id="gTitle" style="font-size:22px">${esc(g.away)} @ ${esc(g.home)}</h2><div class="mut">${esc(SPORTS[g.sport])} · ${esc(fmtTime(g.start))}</div></div></div>`;
+  let h='';
+  // lines
+  const sec=(t,rows)=>rows?`<h4>${t}</h4><div class="ctx">${rows}</div>`:'';
+  const mlRows=g.ml?g.ml.books.slice().sort((a,b)=>dec(b.home)-dec(a.home)).map(b=>bookLine(b.book,`${esc(ab||g.away)} ${fmtOdds(b.away)} / ${esc(hb||g.home)} ${fmtOdds(b.home)}`,b.link,refTag(b.book))).join(''):'';
+  const spRows=g.spread?g.spread.books.map(b=>bookLine(b.book,`${esc(ab||g.away)} ${fl(-b.line)} (${fmtOdds(b.away)}) / ${esc(hb||g.home)} ${fl(b.line)} (${fmtOdds(b.home)})${b.line!==g.spread.line?' <span class="mut">at a different number</span>':''}`,b.link,refTag(b.book))).join(''):'';
+  const ttRows=g.total?g.total.books.map(b=>bookLine(b.book,`Over ${b.line} (${fmtOdds(b.over)}) / Under ${b.line} (${fmtOdds(b.under)})${b.line!==g.total.line?' <span class="mut">at a different number</span>':''}`,b.link,refTag(b.book))).join(''):'';
+  if(g.ml||g.spread||g.total){
+    const bestTxt=[];
+    if(g.spread)bestTxt.push(`<div><b>Best spread:</b> ${esc(ab||g.away)} ${fl(-g.spread.line)} ${fmtOdds(g.spread.away.odds)} at ${esc(g.spread.away.book)}, ${esc(hb||g.home)} ${fl(g.spread.line)} ${fmtOdds(g.spread.home.odds)} at ${esc(g.spread.home.book)}</div>`);
+    if(g.ml)bestTxt.push(`<div><b>Best moneyline:</b> ${esc(ab||g.away)} ${fmtOdds(g.ml.away.odds)} at ${esc(g.ml.away.book)}, ${esc(hb||g.home)} ${fmtOdds(g.ml.home.odds)} at ${esc(g.ml.home.book)}</div>`);
+    if(g.total)bestTxt.push(`<div><b>Best total ${g.total.line}:</b> Over ${fmtOdds(g.total.over.odds)} at ${esc(g.total.over.book)}, Under ${fmtOdds(g.total.under.odds)} at ${esc(g.total.under.book)}</div>`);
+    h+=`<h4>Best prices</h4><div class="ctx">${bestTxt.join('')}</div>`;
+  }
+  // matchup
+  if(m){
+    const val=(x,ed)=>`<div class="v${ed?' ed':''}">${esc(x.v)}${x.r?`<small>#${x.r}</small>`:''}</div>`;
+    if(m.analysis&&m.analysis.length)h+=`<h4>Game analysis</h4><div class="ctx" style="gap:8px">${m.analysis.map(t=>`<p style="margin:0">${esc(t)}</p>`).join('')}</div>`;
+    h+=`<h4>Matchup</h4><div class="mt"><div class="hd">${logo(g.sport,ab)}${esc(ab||m.away.name)}</div><div class="lb">@</div><div class="hd">${logo(g.sport,hb)}${esc(hb||m.home.name)}</div>`+
+      m.stats.map(r=>`${val(r.away,r.edge==='away')}<div class="lb">${esc(r.label)}</div>${val(r.home,r.edge==='home')}`).join('')+`</div><div class="mut" style="font-size:12px;margin-top:4px">Green marks the better number. #n is the league rank (1 is best).</div>`;
+    if(m.notes.length)h+=`<h4>What stands out</h4><ul class="why">${m.notes.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`;
+    const fm=a=>a.length?a.map(x=>`<span class="fm ${esc(x.r)}" title="${esc(x.t)}">${esc(x.r)}</span>`).join(''):'<span class="mut">No games yet</span>';
+    h+=`<h4>Last 5 games</h4><div class="ctx"><div><b>${esc(ab||m.away.name)}:</b> ${fm(m.form.away)}</div><div><b>${esc(hb||m.home.name)}:</b> ${fm(m.form.home)}</div><div class="mut">Hover or long-press a result for the score. Newest first.</div></div>`;
+    if(m.h2h.length)h+=`<h4>Recent meetings</h4><div class="ctx">${m.h2h.map(t=>`<div>${esc(t)}</div>`).join('')}</div>`;
+    if(m.inj.home.length||m.inj.away.length)h+=`<h4>Injuries (Out, Doubtful)</h4><div class="ctx"><div><b>${esc(ab||m.away.name)}:</b> ${esc(m.inj.away.join(', ')||'None listed')}</div><div><b>${esc(hb||m.home.name)}:</b> ${esc(m.inj.home.join(', ')||'None listed')}</div></div>`;
+    if(m.context.length)h+=`<h4>Context</h4><div class="ctx">${m.context.map(t=>`<div>${esc(t)}</div>`).join('')}</div>`;
+  }else h+='<div class="card" style="margin-top:12px">Matchup numbers are not available for this game yet.</div>';
+  h+=sec('Moneyline by book',mlRows)+sec('Spread by book',spRows)+sec('Total by book',ttRows);
+  h+=`<div class="mut" style="margin-top:12px;font-size:12px">Stats describe past games; the notes point out patterns and are not predictions. Links open the sportsbook's game page, not a bet slip. 19+ in Ontario. Please gamble responsibly.</div>`;
+  $('gBody').innerHTML=h;
+  document.documentElement.style.overflow='hidden';$('gmodal').classList.add('open');$('gClose').focus();$('gmodal').querySelector('.sheet').scrollTop=0;
+}
+function closeGame(){
+  document.documentElement.style.overflow='';$('gmodal').classList.remove('open');S.gm=null;if(lastFocus&&document.contains(lastFocus))lastFocus.focus();
+}
+$('gClose').onclick=closeGame;
+$('gmodal').onclick=e=>{if(e.target===$('gmodal'))closeGame()};
+document.addEventListener('keydown',e=>{
+  if(!S.gm)return;
+  if(e.key==='Escape')closeGame();
+  if(e.key==='Tab'){const f=[...$('gmodal').querySelectorAll('button,a[href]')];if(!f.length)return;const i=f.indexOf(document.activeElement);
+    if(e.shiftKey&&i<=0){e.preventDefault();f[f.length-1].focus()}else if(!e.shiftKey&&i===f.length-1){e.preventDefault();f[0].focus()}}
+});
+
 function ago(d){
   const m=Math.round((Date.now()-d)/60000);
   if(m<1)return 'just now';if(m<60)return m+' min ago';
@@ -551,9 +675,10 @@ async function load(){
     const r=await fetch('props.json',{cache:'no-store'});
     if(!r.ok)throw new Error('Data file not found yet. Run the Build data and deploy workflow once.');
     const d=await r.json();
-    if(!d.props||!d.props.length)throw new Error('No props available right now. '+(d.errors||[]).join(' '));
-    LOGOS=d.logos||{};DB=d.props;UPDATED=new Date(d.updated);stamp();loadHist();
-    if(!DB.some(p=>p.sport===S.sport))S.sport=DB[0].sport;
+    if((!d.props||!d.props.length)&&(!d.games||!d.games.length))throw new Error('No props or games available right now. '+(d.errors||[]).join(' '));
+    LOGOS=d.logos||{};DB=d.props||[];GAMES=d.games||[];UPDATED=new Date(d.updated);stamp();loadHist();
+    const have=[...DB,...GAMES].map(x=>x.sport);
+    if(have.length&&!have.includes(S.sport))S.sport=have[0];
   }catch(e){ERR=e.message;render();return}
   render();
 }
