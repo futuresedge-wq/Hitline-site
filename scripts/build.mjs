@@ -40,6 +40,7 @@ const lev = (a, b) => {
   return d[a.length][b.length];
 };
 const LOGOS = {};
+const GAMELINES = {}; // per sport: the raw per-game odds, turned into lines by games.mjs
 const DEBUG = {}; // shown in /api/props to help diagnose missing games
 const ANYTIME = new Set(['player_goals', 'player_anytime_td', 'batter_home_runs']); // anytime-scorer prices are over 0.5
 const ab = (t) => (t === 'LAR' ? 'LA' : t);
@@ -94,7 +95,9 @@ async function oddsProps(cfg, sport) {
   const events = await getJson(`${base}/sports/${cfg.key}/events?apiKey=${key}`);
   const soon = events.filter((e) => { const h = (new Date(e.commence_time) - Date.now()) / 36e5; return h > -1 && h < horizon; }).slice(0, Number(process.env[`${U}_MAX_EVENTS`] || process.env.MAX_EVENTS || 50));
   const only = (process.env.MARKETS || '').split(',').map((x) => x.trim()).filter(Boolean);
-  const markets = Object.keys(cfg.list).filter((k) => !only.length || only.includes(k)).join(',');
+  const playerMarkets = Object.keys(cfg.list).filter((k) => !only.length || only.includes(k)).join(',');
+  // Game lines (moneyline, spread, total) ride along on the same per-game request, so they cost no extra API calls
+  const markets = [playerMarkets, process.env.GAME_LINES === 'off' ? '' : 'h2h,spreads,totals'].filter(Boolean).join(',');
   if (!markets) return [];
   const res = await pool(soon, 1, async (e) => {
     await sleep(300); // one game at a time, spaced out, to stay under burst limits
@@ -114,6 +117,7 @@ async function oddsProps(cfg, sport) {
     }
   }
   DEBUG[sport].marketsSeen = seen;
+  GAMELINES[sport] = { events: res.filter((r) => r && r.e).map((r) => ({ e: r.e, o: r.o || null })), err: res.filter((r) => r && r.err).length };
   const map = new Map();
   // BOOKS=DraftKings,FanDuel,... keeps only those books. If unset, DFS and sweepstakes apps are dropped
   // because their synthetic even-money prices would distort best-odds and edge.
@@ -314,9 +318,10 @@ async function mlb(errors) {
   return warn('mlb', raw, res.filter(Boolean), errors);
 }
 
-async function nfl(errors) {
-  const cfg = MARKETS.nfl, raw = await oddsProps(cfg, 'nfl');
-  if (!raw.length) return [];
+let NFLD = null;
+// nflverse player stats and the schedule, loaded once per build and shared by the props and the game cards
+export async function nflData(errors) {
+  if (NFLD) return NFLD;
   const now = new Date(), y = now.getFullYear(), s = now.getMonth() >= 8 ? y : y - 1, rows = [];
   for (const yr of [s, s - 1]) {
     let ok = false;
@@ -325,9 +330,16 @@ async function nfl(errors) {
     }
     if (!ok) errors.push(`nfl: could not load ${yr} player stats`);
   }
-  const sched = {};
-  try { for (const g of csv(await getText('https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv'))) { sched[`${g.season}|${g.week}|${g.home_team}`] = { home: true, date: g.gameday }; sched[`${g.season}|${g.week}|${g.away_team}`] = { home: false, date: g.gameday }; } }
+  const sched = {}; let games = [];
+  try { games = csv(await getText('https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv')); for (const g of games) { sched[`${g.season}|${g.week}|${g.home_team}`] = { home: true, date: g.gameday }; sched[`${g.season}|${g.week}|${g.away_team}`] = { home: false, date: g.gameday }; } }
   catch { errors.push('nfl: schedule file unavailable, home/away splits disabled'); }
+  return (NFLD = { rows, sched, games, season: s });
+}
+
+async function nfl(errors) {
+  const cfg = MARKETS.nfl, raw = await oddsProps(cfg, 'nfl');
+  if (!raw.length) return [];
+  const { rows, sched } = await nflData(errors);
   const by = new Map();
   for (const r of rows) { if (r.season_type && r.season_type !== 'REG') continue; const k = norm(r.player_display_name); if (!by.has(k)) by.set(k, []); by.get(k).push(r); }
   for (const v of by.values()) v.sort((a, b) => b.season - a.season || b.week - a.week);
@@ -359,9 +371,10 @@ async function nfl(errors) {
 // Completed weeks never change, so each week's box scores are cached and only re-fetched when more games have finished.
 const CFBD = 'https://api.collegefootballdata.com';
 const tz = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto' }).format(new Date(iso));
-async function ncaaf(errors) {
-  const cfg = MARKETS.ncaaf, raw = await oddsProps(cfg, 'ncaaf');
-  if (!raw.length) return [];
+let CFB = null;
+// Teams, season schedule with scores, betting lines and SP+ ratings from CFBD. Shared by the props and the game cards.
+export async function cfbData(errors) {
+  if (CFB) return CFB;
   const key = process.env.CFBD_API_KEY;
   if (!key) throw new Error('CFBD_API_KEY is not set (free key from collegefootballdata.com)');
   const H = { Authorization: `Bearer ${key}`, Accept: 'application/json' };
@@ -376,17 +389,46 @@ async function ncaaf(errors) {
   if (!teams) { try { teams = (await api(`/teams/fbs?year=${season}`)).map((t) => ({ id: t.id, school: t.school, abbr: t.abbreviation || String(t.school).slice(0, 4).toUpperCase() })); LOGS[tk] = { t: Date.now(), rows: teams }; } catch (e) { teams = LOGS[tk] ? LOGS[tk].rows : []; errors.push(`ncaaf: teams list failed (${e.message})`); } } else D.cached++;
   const bySchool = new Map(teams.map((t) => [norm(t.school), t]));
 
-  // Season schedule, cached for 6 hours
-  const sk = `cfb:sched:${season}`; let sched = LOGS[sk] && fresh(LOGS[sk], 6) ? LOGS[sk].rows : null;
+  // Season schedule with scores, cached for 6 hours
+  const sk = `cfb:sched2:${season}`; let sched = LOGS[sk] && fresh(LOGS[sk], 6) ? LOGS[sk].rows : null;
   if (!sched) {
     try {
       const g = await api(`/games?year=${season}&seasonType=regular`);
       if (!DEBUG.ncaafSampleGameKeys) DEBUG.ncaafSampleGameKeys = Object.keys(g[0] || {});
-      sched = g.map((x) => ({ id: x.id, week: x.week, start: pick(x, 'startDate', 'start_date'), home: pick(x, 'homeTeam', 'home_team'), away: pick(x, 'awayTeam', 'away_team'), done: !!(pick(x, 'completed') || pick(x, 'homePoints', 'home_points') != null) }));
+      sched = g.map((x) => ({ id: x.id, week: x.week, start: pick(x, 'startDate', 'start_date'), home: pick(x, 'homeTeam', 'home_team'), away: pick(x, 'awayTeam', 'away_team'), hp: pick(x, 'homePoints', 'home_points') ?? null, ap: pick(x, 'awayPoints', 'away_points') ?? null, neutral: !!pick(x, 'neutralSite', 'neutral_site'), done: !!(pick(x, 'completed') || pick(x, 'homePoints', 'home_points') != null) }));
       LOGS[sk] = { t: Date.now(), rows: sched };
     } catch (e) { sched = LOGS[sk] ? LOGS[sk].rows : []; errors.push(`ncaaf: schedule failed (${e.message})`); }
   } else D.cached++;
   const info = new Map(sched.map((g) => [g.id, g]));
+
+  // Closing-style lines per game (home spread, total) so past games can be graded against the spread, cached 12 hours
+  const lk = `cfb:lines:${season}`; let lines = LOGS[lk] && fresh(LOGS[lk], 12) ? LOGS[lk].rows : null;
+  if (!lines) {
+    try {
+      const L = await api(`/lines?year=${season}&seasonType=regular`); lines = {};
+      if (!DEBUG.ncaafSampleLine) DEBUG.ncaafSampleLine = L[0] ? { keys: Object.keys(L[0]), line: (L[0].lines || [])[0] || null } : null;
+      for (const g of L) {
+        const ls = (g.lines || []).filter((l) => l && l.spread != null && !Number.isNaN(Number(l.spread)));
+        const l = ls.find((x) => /consensus|draftkings/i.test(x.provider)) || ls[0];
+        if (l) lines[g.id] = [Number(l.spread), l.overUnder != null ? Number(l.overUnder) : null];
+      }
+      LOGS[lk] = { t: Date.now(), rows: lines };
+    } catch (e) { lines = LOGS[lk] ? LOGS[lk].rows : {}; errors.push(`ncaaf: betting lines failed (${e.message})`); }
+  } else D.cached++;
+
+  // SP+ ratings (CFBD's efficiency model) cached 24 hours; optional
+  const pk = `cfb:sp:${season}`; let sp = LOGS[pk] && fresh(LOGS[pk], 24) ? LOGS[pk].rows : null;
+  if (!sp) {
+    try { sp = {}; for (const r of await api(`/ratings/sp?year=${season}`)) if (r.team) sp[norm(r.team)] = { rating: r.rating, rank: r.ranking, off: r.offense && r.offense.ranking, def: r.defense && r.defense.ranking, offR: r.offense && r.offense.rating, defR: r.defense && r.defense.rating }; LOGS[pk] = { t: Date.now(), rows: sp }; }
+    catch (e) { sp = LOGS[pk] ? LOGS[pk].rows : {}; (DEBUG.logErrors = DEBUG.logErrors || []).push(`ncaaf sp+: ${e.message}`); }
+  } else D.cached++;
+  return (CFB = { season, teams, bySchool, sched, info, lines, sp, api, pick });
+}
+
+async function ncaaf(errors) {
+  const cfg = MARKETS.ncaaf, raw = await oddsProps(cfg, 'ncaaf');
+  if (!raw.length) return [];
+  const { season, teams, bySchool, sched, info, api, pick } = await cfbData(errors), D = DEBUG.ncaafApi;
 
   // Box scores per completed week: one row per player per game
   const weeks = [...new Set(sched.filter((g) => g.done).map((g) => g.week))].sort((a, b) => a - b);
@@ -453,6 +495,9 @@ async function ncaaf(errors) {
   LOGOS.ncaaf = logos;
   return warn('ncaaf', raw, out, errors);
 }
+
+export { getJson, getText, csv, norm, md, pool, sleep, LOGS, DEBUG, MARKETS, NFL, ab, lev, GAMELINES, injuries, MLBAPI, NHLAPI, ESPN };
+export const resetClock = () => { START = Date.now(); };
 
 export async function build() {
   START = Date.now();
