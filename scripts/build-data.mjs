@@ -1,11 +1,15 @@
 import { writeFileSync } from 'node:fs';
 import { build, loadCache, saveCache } from './build.mjs';
+import { buildGames } from './games.mjs';
 import { loadPrev, update, saveHistory } from './history.mjs';
 
 const CACHE = '.cache/nhl-logs.json';
 loadCache(CACHE);
 
 const data = await build();
+// Game lines and matchup cards. A failure here must never stop the props from publishing.
+try { data.games = await buildGames(data.errors); console.log(`Built ${data.games.length} games`); }
+catch (e) { data.games = []; data.errors.push(`games: ${e.message}`); console.error('Games step failed:', e.message); }
 saveCache(CACHE);
 if (!data.props.length) console.error('No props built.', JSON.stringify(data.errors), JSON.stringify(data.debug));
 writeFileSync('public/props.json', JSON.stringify(data));
