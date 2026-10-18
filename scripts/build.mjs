@@ -144,6 +144,17 @@ async function oddsProps(cfg, sport) {
       map.get(k).books.push({ book: b.title, line, odds: x.price, link: typeof b.link === 'string' && /^https:\/\//.test(b.link) ? b.link : null });
     }
   }
+  // Under prices for ordinary over/under markets (milestone and anytime markets have no under). Matched to the Over by book and line.
+  const unders = new Map();
+  for (const r of res) {
+    if (!r || !r.o) continue;
+    for (const b of (r.o.bookmakers || []).filter(okBook)) for (const m of b.markets || []) for (const x of m.outcomes || []) {
+      if (!cfg.list[m.key] || x.name !== 'Under' || x.point == null || /(?:^|_)\d+plus(?:_|$)/.test(m.key) || ANYTIME.has(m.key)) continue;
+      const k = `${norm(String(x.description || '').replace(/\s*\([^)]*\)\s*$/, '').replace(/^([^,]+),\s*(.+)$/, '$2 $1').trim())}|${m.key}`;
+      unders.set(`${k}|${b.title}|${x.point}`, x.price);
+    }
+  }
+  for (const [k, v] of map) for (const b of v.books) { const u = unders.get(`${k}|${b.book}|${b.line}`); if (u != null) b.under = u; }
   return [...map.values()];
 }
 
@@ -172,7 +183,9 @@ function assemble(sport, r, games, team, opp, home, injMap, teamFull, oppFull) {
   const cnt = {}; r.books.forEach((b) => (cnt[b.line] = (cnt[b.line] || 0) + 1));
   const line = +Object.entries(cnt).sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
   const books = r.books.slice().sort((a, b) => b.odds - a.odds);
-  return { id: `${sport}-${norm(r.player).replace(/ /g, '_')}-${r.mkey}`, sport, player: r.player, team, opp, home, start: r.event.commence_time,
+  const ub = books.filter((b) => b.line === line && b.under != null), ubet = ub.filter((b) => !/pinnacle/i.test(b.book)), uSrc = ubet.length ? ubet : ub;
+  const uBest = uSrc.slice().sort((a, b) => (b.under > 0 ? 1 + b.under / 100 : 1 + 100 / -b.under) - (a.under > 0 ? 1 + a.under / 100 : 1 + 100 / -a.under))[0];
+  return { uodds: uBest ? uBest.under : null, id: `${sport}-${norm(r.player).replace(/ /g, '_')}-${r.mkey}`, sport, player: r.player, team, opp, home, start: r.event.commence_time,
     market: MARKETS[sport].list[r.mkey][0], line, odds: (books.find((b) => b.line === line && !/pinnacle/i.test(b.book)) || books.find((b) => b.line === line)).odds, books, games, injury: inj(injMap, r.player, teamFull, oppFull) };
 }
 
