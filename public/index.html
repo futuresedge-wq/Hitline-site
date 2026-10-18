@@ -105,6 +105,8 @@ button,select,input{font:inherit;color:inherit}
 .chip.on{background:var(--acc);border-color:var(--acc);color:var(--onacc)}
 .chips .sp{flex:none;width:1px;height:20px;background:var(--line);margin:0 4px}
 .chips label{flex:none;display:flex;align-items:center;gap:6px}
+.op{display:flex;gap:6px;align-items:center;flex:none}
+.fsel{flex-wrap:wrap;gap:8px 12px;margin-top:8px}
 
 /* list */
 #banner{margin:12px 0 10px}
@@ -240,8 +242,12 @@ button,select,input{font:inherit;color:inherit}
     <div class="chips scroll" id="mkts" aria-label="Market"></div>
     <div class="chips scroll" aria-label="Sample and sorting">
       <span class="chips" id="splits" aria-label="Sample"></span>
-      <span class="sp" aria-hidden="true"></span>
+    </div>
+    <div class="chips fsel" aria-label="Filters">
+      <div class="seg" id="sides" aria-label="Over or under"></div>
       <label class="mut">Min hit <select id="minHit" class="field"><option value="0">Any</option><option value="60">60%+</option><option value="80">80%+</option><option value="100">100%</option></select></label>
+      <span class="op"><label class="mut">Odds from <select id="oMin" class="field" title="Lowest odds to show. -150 hides -200, -300 and anything worse"><option value="">Any</option><option value="-110">-110</option><option value="-130">-130</option><option value="-150">-150</option><option value="-200">-200</option><option value="-250">-250</option><option value="-300">-300</option></select></label>
+      <label class="mut">to <select id="oMax" class="field" title="Highest odds to show. +200 hides longshots above +200"><option value="">Any</option><option value="100">+100</option><option value="150">+150</option><option value="200">+200</option><option value="300">+300</option><option value="500">+500</option></select></label></span>
       <label class="mut">Sort <select id="sort" class="field"><option value="hit">Hit rate</option><option value="edge">Edge</option><option value="odds">Best odds</option></select></label>
     </div>
   </div>
@@ -289,12 +295,12 @@ function why(p,split,line){
   const st=stats(p,split,line),g=st.gs,out=[];
   if(!st.n)return out;
   const av=z=>z.reduce((t,x)=>t+x.v,0)/(z.length||1);
-  let streak=0;for(const x of p.games){if(x.v>line)streak++;else break}
-  out.push(`Cleared ${line} in ${st.hits} of ${st.n} games${streak>=3?', including the last '+streak+' straight':''}.`);
+  let streak=0;for(const x of p.games){if(hit(p,x.v,line))streak++;else break}
+  out.push(`${isU(p)?'Stayed under':'Cleared'} ${line} in ${st.hits} of ${st.n} games${streak>=3?', including the last '+streak+' straight':''}.`);
   const cu=st.avg-line;
   out.push(`Averages ${st.avg.toFixed(1)}, ${Math.abs(cu).toFixed(1)} ${cu>=0?'above':'below'} the line.`);
-  const mn=Math.min(...g.map(x=>x.v));
-  out.push(mn>line?`Floor is ${mn}: even the worst game cleared the line.`:`Lowest game was ${mn}, so a miss is realistic.`);
+  if(isU(p)){const mx=Math.max(...g.map(x=>x.v));out.push(mx<line?`Ceiling is ${mx}: even the best game stayed under the line.`:`Highest game was ${mx}, so a miss is realistic.`)}
+  else{const mn=Math.min(...g.map(x=>x.v));out.push(mn>line?`Floor is ${mn}: even the worst game cleared the line.`:`Lowest game was ${mn}, so a miss is realistic.`)}
   const h=av(p.games.filter(x=>x.home)),a=av(p.games.filter(x=>!x.home));
   out.push(`Home average ${h.toFixed(1)} vs away ${a.toFixed(1)}.`);
   const l5=av(p.games.slice(0,5)),l20=av(p.games);
@@ -303,7 +309,7 @@ function why(p,split,line){
   return out;
 }
 
-const S={gm:null,recWin:30,game:'all',market:'all',sport:'nhl',tab:'cheat',split:'l5',minHit:0,sort:'hit',q:'',slip:[],modal:null,mline:0};
+const S={side:'over',oMin:'',oMax:'',gm:null,recWin:30,game:'all',market:'all',sport:'nhl',tab:'cheat',split:'l5',minHit:0,sort:'hit',q:'',slip:[],modal:null,mline:0};
 try{S.slip=JSON.parse(localStorage.getItem('hitline-slip')||'[]')}catch(e){}
 try{
   const pr=JSON.parse(localStorage.getItem('hitline-prefs')||'{}');
@@ -313,8 +319,11 @@ try{
   if([0,60,80,100].includes(pr.minHit))S.minHit=pr.minHit;
   if(['hit','edge','odds'].includes(pr.sort))S.sort=pr.sort;
   if(typeof pr.market==='string')S.market=pr.market;
+  if(pr.side==='under')S.side='under';
+  if(['-110','-130','-150','-200','-250','-300'].includes(pr.oMin))S.oMin=pr.oMin;
+  if(['100','150','200','300','500'].includes(pr.oMax))S.oMax=pr.oMax;
 }catch(e){}
-const savePrefs=()=>{try{localStorage.setItem('hitline-prefs',JSON.stringify({sport:S.sport,tab:S.tab,split:S.split,minHit:S.minHit,sort:S.sort,market:S.market}))}catch(e){}};
+const savePrefs=()=>{try{localStorage.setItem('hitline-prefs',JSON.stringify({sport:S.sport,tab:S.tab,split:S.split,minHit:S.minHit,sort:S.sort,market:S.market,oMin:S.oMin,oMax:S.oMax,side:S.side}))}catch(e){}};
 const saveSlip=()=>{try{localStorage.setItem('hitline-slip',JSON.stringify(S.slip))}catch(e){}};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -322,6 +331,11 @@ const fmtOdds=o=>o>0?'+'+o:String(o);
 const implied=o=>o<0?-o/(-o+100)*100:100/(o+100)*100;
 const rateColor=p=>p===100?'var(--hit)':p>=70?'var(--mid)':'var(--miss)';
 const dec=o=>o>0?1+o/100:1+100/-o;
+// Price filter: hide anything priced worse than the floor (e.g. -150) or longer than the cap (e.g. +300)
+// Unders: a derived copy of the prop whose price and book list are the Under side, so the rest of the page works unchanged
+const asSide=(p,side)=>side==='under'?(p.uodds==null?null:(p._u||(p._u=Object.assign({},p,{side:'under',odds:p.uodds,_pr:null,books:(p.books||[]).filter(b=>b.under!=null).map(b=>Object.assign({},b,{odds:b.under}))})))):p;
+const isU=p=>p.side==='under',SW=p=>isU(p)?'Under':'Over',hit=(p,v,line)=>isU(p)?v<line:v>line,slipKey=p=>p.id+(isU(p)?'|u':'');
+const oddsOk=p=>(S.oMin===''||dec(p.odds)>=dec(+S.oMin))&&(S.oMax===''||dec(p.odds)<=dec(+S.oMax));
 // Best price: the best odds at the main line among books you can bet with. Pinnacle is shown for reference only.
 const REF=/pinnacle/i;
 const SHORT=[[/draftkings/i,'DK'],[/fanduel/i,'FD'],[/betmgm|mgm/i,'MGM'],[/betrivers/i,'BR'],[/hard ?rock/i,'HR'],[/betway/i,'Betway'],[/pinnacle/i,'PIN']];
@@ -345,9 +359,9 @@ function slice(p,split){
   return g.slice(0,{l5:5,l10:10,l20:20}[split]);
 }
 function stats(p,split,line){
-  const gs=slice(p,split),hits=gs.filter(x=>x.v>line).length;
+  const gs=slice(p,split),hits=gs.filter(x=>hit(p,x.v,line)).length;
   const pct=gs.length?Math.round(hits/gs.length*100):0;
-  return{gs,hits,n:gs.length,pct,avg:gs.length?gs.reduce((a,x)=>a+x.v,0)/gs.length:0,edge:pct-implied(p.odds)};
+  return{side:p.side,gs,hits,n:gs.length,pct,avg:gs.length?gs.reduce((a,x)=>a+x.v,0)/gs.length:0,edge:pct-implied(p.odds)};
 }
 
 /* Bars are the games (oldest on the left). The dashed line is the prop line,
@@ -356,9 +370,9 @@ function mini(st,line){
   const g=st.gs.slice().reverse(),n=g.length;
   const mx=Math.max(...g.map(x=>x.v),line+.5,1),bw=100/n,gap=Math.min(1.6,bw*.28);
   const bars=g.map((x,i)=>{const h=Math.max(x.v/mx*32,1.5);
-    return `<rect class="${x.v>line?'h':'m'}" x="${(i*bw+gap/2).toFixed(2)}" y="${(34-h).toFixed(2)}" width="${(bw-gap).toFixed(2)}" height="${h.toFixed(2)}"/>`}).join('');
+    return `<rect class="${(st.side==='under'?x.v<line:x.v>line)?'h':'m'}" x="${(i*bw+gap/2).toFixed(2)}" y="${(34-h).toFixed(2)}" width="${(bw-gap).toFixed(2)}" height="${h.toFixed(2)}"/>`}).join('');
   const ly=(34-line/mx*32).toFixed(2);
-  return `<svg class="mini" viewBox="0 0 100 36" preserveAspectRatio="none" role="img" aria-label="Last ${n} games, ${st.hits} over ${line}">${bars}<line class="ln" x1="0" x2="100" y1="${ly}" y2="${ly}" vector-effect="non-scaling-stroke"/></svg>`;
+  return `<svg class="mini" viewBox="0 0 100 36" preserveAspectRatio="none" role="img" aria-label="Last ${n} games, ${st.hits} ${st.side==='under'?'under':'over'} ${line}">${bars}<line class="ln" x1="0" x2="100" y1="${ly}" y2="${ly}" vector-effect="non-scaling-stroke"/></svg>`;
 }
 const ring=pct=>`<div class="ring" style="--p:${pct};--c:${rateColor(pct)}" role="img" aria-label="${pct} percent hit rate"><b>${pct}%</b></div>`;
 const starSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.5l6-.8z"/></svg>';
@@ -376,7 +390,7 @@ const matchup=p=>`${logo(p.sport,p.team)}${esc(p.team)} ${p.home?'vs':'@'} ${log
 const gameKey=p=>p.sport+'|'+String(p.start).slice(0,16)+'|'+[p.team,p.opp].sort().join('|');
 function topPicks(){
   const seen=new Set();
-  return DB.filter(p=>p.sport===S.sport&&(S.game==='all'||gameKey(p)===S.game)).map(p=>({p,st:stats(p,S.split,p.line)}))
+  return DB.map(b=>asSide(b,S.side)).filter(p=>p&&p.sport===S.sport&&(S.game==='all'||gameKey(p)===S.game)&&oddsOk(p)).map(p=>({p,st:stats(p,S.split,p.line)}))
     .filter(({st})=>st.n>=5&&st.pct>=80&&st.edge>0)
     .sort((a,b)=>b.st.edge-a.st.edge||b.st.n-a.st.n)
     .filter(({p})=>!seen.has(p.player)&&seen.add(p.player)).slice(0,8);
@@ -387,6 +401,7 @@ function renderControls(){
     $(el).querySelectorAll('button').forEach(b=>b.onclick=()=>{fn(b.dataset.k);render()})};
   seg('tabs',TABS,S.tab,k=>S.tab=k);
   seg('sports',Object.entries(SPORTS),S.sport,k=>S.sport=k);
+  seg('sides',[['over','Overs'],['under','Unders']],S.side,k=>S.side=k);
   seg('splits',SPLITS,S.split,k=>S.split=k,'chip');
 }
 
@@ -399,7 +414,8 @@ function render(){
   renderControls();
   savePrefs();
   $('sports').hidden=S.tab==='rec'||S.tab==='slip'; // both views span every sport
-  $('minHit').value=String(S.minHit);$('sort').value=S.sort;
+  $('sides').hidden=S.tab==='slip';
+  $('minHit').value=String(S.minHit);$('sort').value=S.sort;$('oMin').value=S.oMin;$('oMax').value=S.oMax;
   const isG=S.tab==='games';
   $('gcards').hidden=!isG;
   if(isG){['filters','banner','grid','record','picksBox','games'].forEach(id=>$(id).hidden=true);renderGames();return}
@@ -436,19 +452,20 @@ function render(){
   if(tp.length){
     $('pkNote').textContent=`Biggest gap between hit rate and the odds, ${label} sample`;
     $('picks').innerHTML=tp.map(({p,st})=>`<article class="pick">
-      <div><button class="rowlink" data-open="${esc(p.id)}">${esc(p.player)}</button>${injTag(p)}<div class="mut">${matchup(p)}</div></div>
-      <div class="pp"><b>Over ${p.line}</b> ${esc(p.market.toLowerCase())}</div>
+      <div><button class="rowlink" data-open="${esc(slipKey(p))}">${esc(p.player)}</button>${injTag(p)}<div class="mut">${matchup(p)}</div></div>
+      <div class="pp"><b>${SW(p)} ${p.line}</b> ${esc(p.market.toLowerCase())}</div>
       ${mini(st,p.line)}
       <div class="pf"><span class="rate" style="color:${rateColor(st.pct)}">${st.pct}%</span><span class="od"><b>${fmtOdds(p.odds)}</b>${bkTag(p)}<br><span class="edge" style="color:var(--hit)">${sgn(st.edge)} edge</span></span></div></article>`).join('');
     bind($('picks'));
   }
 
   const q=S.q.toLowerCase();
-  let list=DB.filter(p=>{
-    if(S.tab==='slip'){if(!S.slip.includes(p.id))return false}
-    else if(p.sport!==S.sport)return false;
+  const base=S.tab==='slip'?DB.flatMap(b=>[S.slip.includes(b.id)?b:null,S.slip.includes(b.id+'|u')?asSide(b,'under'):null].filter(Boolean)):DB.map(b=>asSide(b,S.side)).filter(Boolean);
+  let list=base.filter(p=>{
+    if(S.tab!=='slip'&&p.sport!==S.sport)return false;
     if(S.tab!=='slip'&&S.game!=='all'&&gameKey(p)!==S.game)return false;
     if(S.market!=='all'&&p.market!==S.market)return false;
+    if(S.tab!=='slip'&&!oddsOk(p))return false;
     const st=stats(p,S.split,p.line);
     if(!st.n)return false;
     if(S.tab==='cheat'&&st.pct<100)return false;
@@ -456,19 +473,19 @@ function render(){
     return !q||(p.player+' '+p.team+' '+p.market).toLowerCase().includes(q);
   }).map(p=>({p,st:stats(p,S.split,p.line)}));
   list.sort((a,b)=>S.sort==='edge'?b.st.edge-a.st.edge:S.sort==='odds'?dec(b.p.odds)-dec(a.p.odds):b.st.pct-a.st.pct||b.st.n-a.st.n);
-  $('banner').textContent=S.tab==='cheat'?`${list.length} props that cleared the line in every ${label} game.`:S.tab==='slip'?`${list.length} saved ${list.length===1?'prop':'props'} across all sports (${label} sample).`:`${list.length} props, ${label} sample.`;
+  $('banner').textContent=S.tab==='cheat'?`${list.length} ${S.side==='under'?(list.length===1?'under that stayed':'unders that stayed')+' under':(list.length===1?'prop that cleared':'props that cleared')} the line in every ${label} game.`:S.tab==='slip'?`${list.length} saved ${list.length===1?'prop':'props'} across all sports (${label} sample).`:`${list.length} props, ${label} sample.`;
   if(!list.length){
-    $('grid').innerHTML=`<div class="card" style="grid-column:1/-1;text-align:center">${S.tab==='slip'?'Your slip is empty. Tap the star on any prop to save it here.':'No props match these filters. Try a lower minimum hit rate, another market, or the All props tab.'}</div>`;return;
+    $('grid').innerHTML=`<div class="card" style="grid-column:1/-1;text-align:center">${S.tab==='slip'?'Your slip is empty. Tap the star on any prop to save it here.':S.side==='under'&&!DB.some(p=>p.uodds!=null)?'Under prices show up after the next data update.':'No props match these filters. Try a lower minimum hit rate, wider price limits, another market, or the All props tab.'}</div>`;return;
   }
   $('grid').innerHTML=list.map(({p,st})=>{
-    const saved=S.slip.includes(p.id);
+    const saved=S.slip.includes(slipKey(p));
     return `<article class="prop">
-      <div class="info"><button class="rowlink" data-open="${esc(p.id)}">${esc(p.player)}</button>${injTag(p)}
-        <div class="pp"><b>Over ${p.line}</b> ${esc(p.market.toLowerCase())}</div><div class="mut">${matchup(p)}</div></div>
+      <div class="info"><button class="rowlink" data-open="${esc(slipKey(p))}">${esc(p.player)}</button>${injTag(p)}
+        <div class="pp"><b>${SW(p)} ${p.line}</b> ${esc(p.market.toLowerCase())}</div><div class="mut">${matchup(p)}</div></div>
       ${mini(st,p.line)}
       ${ring(st.pct)}
-      <div class="foot2"><span>${st.hits} of ${st.n} games over</span><span><b style="color:var(--tx)">${fmtOdds(p.odds)}</b>${bkTag(p)} <span class="edge" style="color:${st.edge>=0?'var(--hit)':'var(--miss)'}">${sgn(st.edge)} edge</span></span></div>
-      <button class="star" data-save="${esc(p.id)}" aria-pressed="${saved}" aria-label="${saved?'Remove from':'Save to'} slip">${starSvg}</button></article>`}).join('');
+      <div class="foot2"><span>${st.hits} of ${st.n} games ${isU(p)?'under':'over'}</span><span><b style="color:var(--tx)">${fmtOdds(p.odds)}</b>${bkTag(p)} <span class="edge" style="color:${st.edge>=0?'var(--hit)':'var(--miss)'}">${sgn(st.edge)} edge</span></span></div>
+      <button class="star" data-save="${esc(slipKey(p))}" aria-pressed="${saved}" aria-label="${saved?'Remove from':'Save to'} slip">${starSvg}</button></article>`}).join('');
   bind($('grid'));
 }
 
@@ -519,8 +536,8 @@ function toggle(id){
 
 let chart=null,lastFocus=null;
 function openModal(id){
-  S.modal=DB.find(p=>p.id===id);if(!S.modal)return;S.mline=S.modal.line;lastFocus=document.activeElement;
-  $('mHead').innerHTML=`<div class="mhead">${logo(S.modal.sport,S.modal.team,true)}<div><h2 id="mTitle" style="font-size:22px">${esc(S.modal.player)}</h2><div class="mut">${esc(S.modal.team)} · Over ${S.modal.line} ${esc(S.modal.market.toLowerCase())} (${fmtOdds(S.modal.odds)})</div></div></div>`;
+  const u=/\|u$/.test(id),b=DB.find(p=>p.id===id.replace(/\|u$/,''));S.modal=b?asSide(b,u?'under':'over'):null;if(!S.modal)return;S.mline=S.modal.line;lastFocus=document.activeElement;
+  $('mHead').innerHTML=`<div class="mhead">${logo(S.modal.sport,S.modal.team,true)}<div><h2 id="mTitle" style="font-size:22px">${esc(S.modal.player)}</h2><div class="mut">${esc(S.modal.team)} · ${SW(S.modal)} ${S.modal.line} ${esc(S.modal.market.toLowerCase())} (${fmtOdds(S.modal.odds)})</div></div></div>`;
   document.documentElement.style.overflow='hidden';$('modal').classList.add('open');drawModal();$('mClose').focus();
 }
 function closeModal(){
@@ -532,24 +549,24 @@ function drawModal(){
   $('mSplits').innerHTML=SPLITS.map(([k,l])=>`<button class="chip${k===S.split?' on':''}" aria-pressed="${k===S.split}" data-k="${k}">${l}</button>`).join('');
   $('mSplits').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.split=b.dataset.k;render();drawModal();const n=$('mSplits').querySelector('[data-k="'+S.split+'"]');if(n)n.focus()});
   $('lineVal').textContent=line;
-  $('mRate').textContent=`${st.hits}/${st.n} over (${st.pct}%)`;$('mRate').style.color=rateColor(st.pct);
+  $('mRate').textContent=`${st.hits}/${st.n} ${isU(p)?'under':'over'} (${st.pct}%)`;$('mRate').style.color=rateColor(st.pct);
   $('mStats').textContent=`Average ${st.avg.toFixed(1)} · Implied ${implied(p.odds).toFixed(1)}% · Edge ${st.edge>=0?'+':''}${st.edge.toFixed(1)}`;
   $('mWhy').innerHTML=why(p,S.split,line).map(t=>'<li>'+esc(t)+'</li>').join('');
   $('mCtx').innerHTML=`<div><b>Next game:</b> ${p.home?'vs':'@'} ${esc(p.opp)}, ${esc(fmtTime(p.start))}</div><div><b>${esc(p.player)}:</b> ${esc(p.injury.self||'No injury listed')}</div><div><b>${esc(p.team)} out:</b> ${esc(p.injury.team.join(', ')||'None listed')}</div><div><b>${esc(p.opp)} out:</b> ${esc(p.injury.opp.join(', ')||'None listed')}</div>`;
   const safe=u=>/^https:\/\//.test(u||'')?u:null;
   const pr=price(p),dsort=(a,b)=>dec(b.odds)-dec(a.odds);
   const at=p.books.filter(b=>b.line===p.line).sort(dsort),oth=p.books.filter(b=>b.line!==p.line).sort((a,b)=>a.line-b.line||dsort(a,b));
-  const bookRow=(b,tag)=>`<div class="brow"><span><b>${esc(b.book)}:</b> Over ${b.line} (${fmtOdds(b.odds)})${tag||''}</span>${safe(b.link)?`<a class="btn" style="padding:6px 10px;min-height:36px;display:inline-flex;align-items:center;text-decoration:none;color:inherit;white-space:nowrap" href="${esc(b.link)}" target="_blank" rel="noopener noreferrer nofollow" aria-label="Open ${esc(b.book)} event page">Open game</a>`:''}</div>`;
-  const sum=!pr.best?'':pr.ref?'Only a reference line is listed, so there is no bettable price to compare.':pr.n>=2?`<div><b>Best price:</b> ${fmtOdds(pr.best.odds)} at ${esc(pr.best.book)}, ${pr.gain.toFixed(1)} points of implied chance better than the average of ${pr.n} books at ${p.line}.</div>`:`<div><b>Only ${esc(pr.best.book)}</b> lists Over ${p.line}, so there is nothing to compare yet.</div>`;
+  const bookRow=(b,tag)=>`<div class="brow"><span><b>${esc(b.book)}:</b> ${SW(p)} ${b.line} (${fmtOdds(b.odds)})${tag||''}</span>${safe(b.link)?`<a class="btn" style="padding:6px 10px;min-height:36px;display:inline-flex;align-items:center;text-decoration:none;color:inherit;white-space:nowrap" href="${esc(b.link)}" target="_blank" rel="noopener noreferrer nofollow" aria-label="Open ${esc(b.book)} event page">Open game</a>`:''}</div>`;
+  const sum=!pr.best?'':pr.ref?'Only a reference line is listed, so there is no bettable price to compare.':pr.n>=2?`<div><b>Best price:</b> ${fmtOdds(pr.best.odds)} at ${esc(pr.best.book)}, ${pr.gain.toFixed(1)} points of implied chance better than the average of ${pr.n} books at ${p.line}.</div>`:`<div><b>Only ${esc(pr.best.book)}</b> lists ${SW(p)} ${p.line}, so there is nothing to compare yet.</div>`;
   $('mBooks').innerHTML=sum+at.slice(0,10).map(b=>bookRow(b,REF.test(b.book)?' <span class="tag ref" title="Shown for comparison only">Reference line</span>':(b===pr.best&&pr.n>=2?' <span class="tag best">Best price</span>':''))).join('')+(oth.length?'<div class="mut" style="margin-top:4px">Other lines</div>'+oth.slice(0,6).map(b=>bookRow(b,'')).join(''):'')+'<div class="mut" style="margin-top:6px">Links open the sportsbook\'s game page, not a bet slip. 19+ in Ontario. Please gamble responsibly.</div>';
-  const saved=S.slip.includes(p.id);$('mSave').textContent=saved?'Remove from slip':'Add to slip';
+  const saved=S.slip.includes(slipKey(p));$('mSave').textContent=saved?'Remove from slip':'Add to slip';
   if(typeof Chart==='undefined')return;
   const css=getComputedStyle(document.documentElement),c=n=>css.getPropertyValue(n).trim();
   if(chart)chart.destroy();
   chart=new Chart($('chart').getContext('2d'),{data:{
     labels:gs.map(x=>`${x.home?'vs':'@'} ${x.opp} ${x.date}`),
     datasets:[
-      {type:'bar',data:gs.map(x=>x.v),backgroundColor:gs.map(x=>x.v>line?c('--hit'):c('--miss')),borderRadius:5},
+      {type:'bar',data:gs.map(x=>x.v),backgroundColor:gs.map(x=>hit(p,x.v,line)?c('--hit'):c('--miss')),borderRadius:5},
       {type:'line',label:'Line',data:gs.map(()=>line),borderColor:c('--tx'),borderDash:[6,4],pointRadius:0,borderWidth:2},
       {type:'line',label:'Average',data:gs.map(()=>st.avg),borderColor:c('--mid'),pointRadius:0,borderWidth:1.5}]},
    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:c('--mut'),filter:i=>i.datasetIndex>0}}},
@@ -557,7 +574,7 @@ function drawModal(){
 }
 $('up').onclick=()=>{S.mline+=.5;drawModal()};
 $('dn').onclick=()=>{S.mline=Math.max(.5,S.mline-.5);drawModal()};
-$('mSave').onclick=()=>{toggle(S.modal.id);drawModal();render()};
+$('mSave').onclick=()=>{toggle(slipKey(S.modal));drawModal();render()};
 $('mClose').onclick=closeModal;
 $('modal').onclick=e=>{if(e.target===$('modal'))closeModal()};
 document.addEventListener('keydown',e=>{
@@ -571,6 +588,8 @@ document.addEventListener('keydown',e=>{
 });
 $('minHit').onchange=e=>{S.minHit=+e.target.value;render()};
 $('sort').onchange=e=>{S.sort=e.target.value;render()};
+$('oMin').onchange=e=>{S.oMin=e.target.value;render()};
+$('oMax').onchange=e=>{S.oMax=e.target.value;render()};
 $('q').oninput=e=>{S.q=e.target.value;render()};
 
 /* ---------- Games tab: lines and matchup cards ---------- */
