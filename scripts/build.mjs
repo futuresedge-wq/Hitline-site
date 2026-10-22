@@ -23,6 +23,10 @@ const MARKETS = {
     batter_hits: ['Hits', 'hits', 'hitting'], batter_total_bases: ['Total bases', 'totalBases', 'hitting'], batter_home_runs: ['Home runs', 'homeRuns', 'hitting'],
     batter_rbis: ['RBIs', 'rbi', 'hitting'], batter_runs_scored: ['Runs', 'runs', 'hitting'], batter_hits_runs_rbis: ['Hits + runs + RBIs', 'hrr', 'hitting'],
     pitcher_strikeouts: ['Pitcher strikeouts', 'strikeOuts', 'pitching'], pitcher_outs: ['Pitcher outs', 'outs', 'pitching'] } },
+  nba: { key: 'basketball_nba', espn: 'basketball/nba', list: {
+    player_points: ['Points', 'pts'], player_rebounds: ['Rebounds', 'reb'], player_assists: ['Assists', 'ast'], player_threes: ['3-pointers made', 'fg3'],
+    player_points_rebounds_assists: ['Pts + reb + ast', 'pra'], player_points_rebounds: ['Pts + reb', 'pr'], player_points_assists: ['Pts + ast', 'pa'], player_rebounds_assists: ['Reb + ast', 'ra'],
+    player_steals: ['Steals', 'stl'], player_blocks: ['Blocks', 'blk'], player_turnovers: ['Turnovers', 'tov'] } },
   nfl: { key: 'americanfootball_nfl', espn: 'football/nfl', list: {
     player_rush_yds: ['Rushing yards', 'rushing_yards'], player_reception_yds: ['Receiving yards', 'receiving_yards'], player_receptions: ['Receptions', 'receptions'],
     player_pass_yds: ['Passing yards', 'passing_yards'], player_rush_attempts: ['Rush attempts', 'carries'],
@@ -48,7 +52,7 @@ const ab = (t) => (t === 'LAR' ? 'LA' : t);
 const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/-/g, ' ').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim().replace(/ (jr|sr|ii|iii|iv)$/, '');
 const md = (d) => { const [, m, x] = d.split('-'); return `${+m}/${+x}`; };
 const sleep = (ms) => new Promise((z) => setTimeout(z, ms));
-const GAP = { 'api-web.nhle.com': 250, 'api.collegefootballdata.com': 300 }; // minimum ms between requests per host
+const GAP = { 'api-web.nhle.com': 250, 'api.collegefootballdata.com': 300, 'site.web.api.espn.com': 120 }; // minimum ms between requests per host
 const lastHit = {};
 async function gap(url) {
   let h; try { h = new URL(url).host; } catch { return; }
@@ -94,7 +98,7 @@ async function oddsProps(cfg, sport) {
   const regions = process.env.ODDS_REGIONS || 'us', horizon = Number(process.env[`${U}_HORIZON_HOURS`] || process.env.HORIZON_HOURS || 36);
   const events = await getJson(`${base}/sports/${cfg.key}/events?apiKey=${key}`);
   const soon = events.filter((e) => { const h = (new Date(e.commence_time) - Date.now()) / 36e5; return h > -1 && h < horizon; }).slice(0, Number(process.env[`${U}_MAX_EVENTS`] || process.env.MAX_EVENTS || 50));
-  const only = (process.env.MARKETS || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const only = (process.env[`${U}_MARKETS`] || process.env.MARKETS || '').split(',').map((x) => x.trim()).filter(Boolean);
   const playerMarkets = Object.keys(cfg.list).filter((k) => !only.length || only.includes(k)).join(',');
   // Game lines (moneyline, spread, total) ride along on the same per-game request, so they cost no extra API calls
   const markets = [playerMarkets, process.env.GAME_LINES === 'off' ? '' : 'h2h,spreads,totals'].filter(Boolean).join(',');
@@ -331,6 +335,99 @@ async function mlb(errors) {
   return warn('mlb', raw, res.filter(Boolean), errors);
 }
 
+/* ---------- NBA: team list and rosters from ESPN's public API, game logs from its athlete gamelog ---------- */
+let NBAD = null;
+export const nbaSeason = () => { const n = new Date(); return n.getMonth() >= 8 ? n.getFullYear() + 1 : n.getFullYear(); }; // ESPN names a season by the year it ends
+export async function nbaData() {
+  if (NBAD) return NBAD;
+  const d = await getJson(`${ESPN}/basketball/nba/teams?limit=40`);
+  const teams = ((d.sports || [])[0]?.leagues || [])[0]?.teams?.map((x) => x.team).filter(Boolean).map((t) => ({ id: String(t.id), abbr: t.abbreviation, full: t.displayName, name: t.name })) || [];
+  if (!teams.length) throw new Error('nba: ESPN returned no teams');
+  // "Los Angeles Clippers" (odds feed) is "LA Clippers" at ESPN, so fall back to the nickname
+  const find = (full) => { const n = norm(full); return teams.find((t) => norm(t.full) === n) || teams.find((t) => n.endsWith(norm(t.name))) || null; };
+  return (NBAD = { teams, find, season: nbaSeason() });
+}
+const etDate = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(iso)); // YYYY-MM-DD, the date US fans know the game by
+const sn = (x) => { if (x == null || x === '') return null; const v = Number(typeof x === 'object' ? (x.value ?? x.displayValue) : x); return Number.isFinite(v) ? v : null; };
+// ESPN's gamelog lists stats by column label (MIN, FG, 3PT, REB, AST, ...). Read them by label so a reordered column cannot shift the numbers.
+export function parseNbaLog(d) {
+  const L = d.labels || [], ix = (l) => L.indexOf(l), iM = ix('MIN'), iP = ix('PTS'), iR = ix('REB'), iA = ix('AST'), i3 = ix('3PT'), iS = ix('STL'), iB = ix('BLK'), iT = ix('TO');
+  const rows = [];
+  for (const st of d.seasonTypes || []) {
+    if (!/regular/i.test(st.displayName || '')) continue;
+    for (const cat of st.categories || []) for (const ev of cat.events || []) {
+      const m = (d.events || {})[ev.eventId], s = ev.stats || [];
+      if (!m || !s.length) continue;
+      const at = (i) => (i < 0 ? null : sn(s[i])), mins = at(iM);
+      if (iM >= 0 && !mins) continue; // did not play
+      const t3 = i3 < 0 ? null : parseInt(String(s[i3]).split('-')[0], 10);
+      rows.push({ date: etDate(m.gameDate), opp: m.opponent?.abbreviation || '?', home: m.atVsOrVs !== '@', pts: at(iP), reb: at(iR), ast: at(iA), fg3: Number.isFinite(t3) ? t3 : null, stl: at(iS), blk: at(iB), tov: at(iT) });
+    }
+  }
+  return rows.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 25);
+}
+const nbaVal = (x, stat) => {
+  const sum = (...k) => (k.some((z) => x[z] == null) ? null : k.reduce((t, z) => t + x[z], 0));
+  return { pra: () => sum('pts', 'reb', 'ast'), pr: () => sum('pts', 'reb'), pa: () => sum('pts', 'ast'), ra: () => sum('reb', 'ast') }[stat]?.() ?? x[stat];
+};
+function findPid(m, n) {
+  if (!m) return null;
+  if (m.has(n)) return m.get(n);
+  const [f, ...rest] = n.split(' '), l = rest.join(' ');
+  const c = [...m].filter(([rn]) => { const [rf, ...rr] = rn.split(' '); return rr.join(' ') === l && rf[0] === f[0]; });
+  if (c.length === 1) return c[0][1];
+  const near = [...m].filter(([rn]) => { const [rf, ...rr] = rn.split(' '); return rf[0] === f[0] && lev(rr.join(' '), l) <= 1; });
+  return near.length === 1 ? near[0][1] : null;
+}
+async function nba(errors) {
+  const cfg = MARKETS.nba, raw = await oddsProps(cfg, 'nba');
+  if (!raw.length) return [];
+  const { find, season } = await nbaData(), seasons = [season, season - 1];
+  const need = new Map(); raw.forEach((r) => [r.event.home_team, r.event.away_team].forEach((t) => { const x = find(t); if (x) need.set(x.id, x); }));
+  const rosters = {};
+  await pool([...need.keys()], 6, async (id) => {
+    const d = await getJson(`${ESPN}/basketball/nba/teams/${id}/roster`);
+    rosters[id] = new Map((d.athletes || []).flatMap((a) => a.items || [a]).filter((p) => p && p.id).map((p) => [norm(p.fullName || p.displayName), String(p.id)]));
+  });
+  DEBUG.nbaRosterSizes = Object.fromEntries([...need.values()].map((t) => [t.abbr, rosters[t.id]?.size ?? 0]));
+  const injMap = await injuries(cfg.espn);
+  const cache = new Map();
+  const logs = (id) => { if (!cache.has(id)) cache.set(id, (async () => {
+    let all = [];
+    for (const se of seasons) {
+      const k = `nba:${id}:${se}`, c = LOGS[k], stale = se === seasons[0] && (!c || Date.now() - c.t > 8 * 36e5);
+      let rows = c && !stale ? c.rows : null;
+      if (!rows && Date.now() - START > budgetMs()) { (DEBUG.budgetHit = DEBUG.budgetHit || {})[CUR] = true; rows = c ? c.rows : []; }
+      if (!rows) {
+        try {
+          const d = await getJson(`https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${id}/gamelog?season=${se}`);
+          rows = parseNbaLog(d);
+          if (!DEBUG.nbaLogSample) DEBUG.nbaLogSample = { id, season: se, labels: d.labels, seasonTypes: (d.seasonTypes || []).map((s) => s.displayName), rows: rows.length, first: rows[0] || null };
+          LOGS[k] = { t: Date.now(), rows };
+          if (++FETCHED % 25 === 0) console.log(`nba: fetched ${FETCHED} game logs, ${Math.round((Date.now() - START) / 1000)}s elapsed`);
+        } catch (e) { const L = (DEBUG.logErrors = DEBUG.logErrors || []); if (L.length < 10) L.push(`nba ${id} ${se}: ${e.message}`); rows = c ? c.rows : []; }
+      }
+      all = all.concat(rows);
+      if (all.length >= 20) break;
+    }
+    return all.sort((a, b) => b.date.localeCompare(a.date));
+  })()); return cache.get(id); };
+  const drops = { noRoster: [], shortLog: [] };
+  const res = await pool(raw, 8, async (r) => { try {
+    const e = r.event, ht = find(e.home_team), at = find(e.away_team), n = norm(r.player);
+    if (!ht || !at) { drops.noRoster.push(`${r.player} (team?)`); return null; }
+    const hid = findPid(rosters[ht.id], n), aid = findPid(rosters[at.id], n), side = hid ? 'home' : aid ? 'away' : null;
+    if (!side) { drops.noRoster.push(r.player); return null; }
+    const stat = cfg.list[r.mkey][1], rows = await logs(side === 'home' ? hid : aid), g = [];
+    for (const x of rows.slice(0, 20)) { const v = nbaVal(x, stat); if (v != null) g.push({ v, opp: x.opp, home: !!x.home, date: md(x.date) }); }
+    if (g.length < 5) { drops.shortLog.push(r.player); return null; }
+    const mine = side === 'home' ? ht : at, theirs = side === 'home' ? at : ht;
+    return assemble('nba', r, g, mine.abbr, theirs.abbr, side === 'home', injMap, mine.full, theirs.full);
+  } catch (err) { (DEBUG.nbaErrors = DEBUG.nbaErrors || []).length < 8 && DEBUG.nbaErrors.push(`${r.player}: ${err.message}`); return null; } });
+  DEBUG.nbaDropped = { noRoster: [...new Set(drops.noRoster)].slice(0, 15), shortLog: [...new Set(drops.shortLog)].slice(0, 15) };
+  return warn('nba', raw, res.filter(Boolean), errors);
+}
+
 let NFLD = null;
 // nflverse player stats and the schedule, loaded once per build and shared by the props and the game cards
 export async function nflData(errors) {
@@ -515,7 +612,7 @@ export const resetClock = () => { START = Date.now(); };
 export async function build() {
   START = Date.now();
   const out = { updated: new Date().toISOString(), props: [], errors: [], debug: DEBUG, logos: LOGOS };
-  for (const [sport, fn] of [['nhl', nhl], ['nfl', nfl], ['mlb', mlb], ['ncaaf', ncaaf]].filter(([sp]) => (process.env.SPORTS || 'nhl,nfl,mlb').split(',').map((x) => x.trim()).includes(sp))) {
+  for (const [sport, fn] of [['nhl', nhl], ['nfl', nfl], ['mlb', mlb], ['ncaaf', ncaaf], ['nba', nba]].filter(([sp]) => (process.env.SPORTS || 'nhl,nfl,mlb').split(',').map((x) => x.trim()).includes(sp))) {
     START = Date.now(); CUR = sport; // each sport gets its own time budget so one cannot starve the next
     try { out.props.push(...(await fn(out.errors))); } catch (e) { out.errors.push(`${sport}: ${e.message}`); }
   }
