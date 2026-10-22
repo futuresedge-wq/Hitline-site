@@ -1,7 +1,7 @@
 // Game cards: moneyline, spread and total from the odds feed, plus a stats-based matchup for each game.
 // Everything is computed from free data (nflverse, NHL, MLB and CFBD) so there is no model and no paid service.
 // The odds come from the same per-game requests the props already make (see GAMELINES in build.mjs).
-import { getJson, norm, GAMELINES, DEBUG, NFL, ab, injuries, nflData, cfbData, MLBAPI, NHLAPI, ESPN, resetClock } from './build.mjs';
+import { getJson, norm, pool, GAMELINES, DEBUG, NFL, ab, injuries, nflData, cfbData, nbaData, MLBAPI, NHLAPI, ESPN, resetClock } from './build.mjs';
 
 const TZ = 'America/Toronto';
 const day = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date(iso)); // YYYY-MM-DD
@@ -395,6 +395,69 @@ async function mlbCards(list, errors) {
   return out;
 }
 
+/* ---------- 6a. NBA ---------- */
+// Everything comes from each team's results (ESPN schedule), so the numbers are this season's own: points for and against, form, rest, home/road.
+async function nbaCards(list, errors) {
+  const { teams, find, season } = await nbaData();
+  const sched = new Map();
+  await pool(teams, 6, async (t) => {
+    try { sched.set(t.id, (await getJson(`${ESPN}/basketball/nba/teams/${t.id}/schedule?season=${season}&seasontype=2`)).events || []); }
+    catch (e) { (DEBUG.logErrors = DEBUG.logErrors || []).push(`nba schedule ${t.abbr}: ${e.message}`); }
+  });
+  const sc = (x) => { const v = Number(x && typeof x === 'object' ? (x.value ?? x.displayValue) : x); return Number.isFinite(v) ? v : null; };
+  const items = new Map();
+  for (const t of teams) {
+    const v = [];
+    for (const ev of sched.get(t.id) || []) {
+      const c = (ev.competitions || [])[0]; if (!c || !(c.status && c.status.type && c.status.type.completed)) continue;
+      const me = (c.competitors || []).find((x) => String(x.team && x.team.id) === t.id), op = (c.competitors || []).find((x) => x !== me);
+      if (!me || !op || sc(me.score) == null || sc(op.score) == null) continue;
+      v.push({ date: day(ev.date), opp: (op.team && op.team.abbreviation) || '?', home: me.homeAway === 'home', pf: sc(me.score), pa: sc(op.score) });
+    }
+    items.set(t.abbr, v.sort((x, y) => (x.date < y.date ? 1 : -1)));
+  }
+  DEBUG.nbaSchedSample = { teams: sched.size, gamesPlayed: Object.fromEntries([...items].slice(0, 5).map(([k, v]) => [k, v.length])) };
+  const A = new Map([...items].map(([k, v]) => [k, agg(v)]));
+  const elig = [...A].filter(([, o]) => o.n >= 3);
+  const ppg = new Map(elig.map(([t, o]) => [t, o.ppg])), papg = new Map(elig.map(([t, o]) => [t, o.papg]));
+  const injMap = await injuries('basketball/nba');
+  const bad = (t) => (injMap[norm(t)] || []).filter((x) => /out|doubtful|injured/i.test(x.status)).slice(0, 6).map((x) => `${x.disp} (${x.status})`);
+  const L10 = (v) => { const z = v.slice(0, 10); const w = z.filter((x) => x.pf > x.pa).length; return `${w}-${z.length - w}`; };
+  const out = new Map();
+  for (const g of list) {
+    const H = find(g.home), Aw = find(g.away);
+    if (!H || !Aw) continue;
+    const ha = A.get(H.abbr) || agg([]), aa = A.get(Aw.abbr) || agg([]), hv = items.get(H.abbr) || [], av = items.get(Aw.abbr) || [];
+    const M = shell('nba', g.home, g.away, H.abbr, Aw.abbr), R = (m, k, hi) => rankIn(m, k, hi);
+    if (ha.n || aa.n) {
+      const wp = (o) => (o.n ? o.w / o.n : null);
+      M.stats.push(
+        { label: 'Record', home: { v: rec(ha.w, ha.l) }, away: { v: rec(aa.w, aa.l) }, edge: wp(ha) == null || wp(aa) == null || wp(ha) === wp(aa) ? null : wp(ha) > wp(aa) ? 'home' : 'away' },
+        row('Points per game', ha.ppg, aa.ppg, { better: 'high', fmt: f1, rh: R(ppg, H.abbr, true), ra: R(ppg, Aw.abbr, true) }),
+        row('Points allowed', ha.papg, aa.papg, { better: 'low', fmt: f1, rh: R(papg, H.abbr, false), ra: R(papg, Aw.abbr, false) }),
+        row('Point margin', ha.n ? ha.ppg - ha.papg : null, aa.n ? aa.ppg - aa.papg : null, { better: 'high', fmt: (x) => (x == null ? '-' : (x > 0 ? '+' : '') + f1(x)) }),
+        { label: 'Home / road', home: { v: rec(ha.home.w, ha.home.l) + ' home' }, away: { v: rec(aa.road.w, aa.road.l) + ' road' }, edge: null },
+        { label: 'Last 10', home: { v: L10(hv) }, away: { v: L10(av) }, edge: null },
+        { label: 'Streak', home: { v: ha.streak || '-' }, away: { v: aa.streak || '-' }, edge: null });
+      M.form = { home: ha.last, away: aa.last };
+      commonNotes(M.notes, g.home, g.away, ha, aa);
+      clash(M.notes, g.home, g.away, R(ppg, H.abbr, true), R(papg, Aw.abbr, false), `${f1(ha.ppg)} pts/g`, `${f1(aa.papg)} allowed`);
+      clash(M.notes, g.away, g.home, R(ppg, Aw.abbr, true), R(papg, H.abbr, false), `${f1(aa.ppg)} pts/g`, `${f1(ha.papg)} allowed`);
+    }
+    const rest = (v) => (v.length ? dayNum(day(g.start)) - dayNum(v[0].date) - 1 : null), hr = rest(hv), ar = rest(av);
+    if (hr != null && ar != null) M.stats.push(row('Days of rest', hr, ar, { better: 'high' }));
+    if (hr === 0) M.notes.push(`${g.home} is on the second night of a back-to-back.`);
+    if (ar === 0) M.notes.push(`${g.away} is on the second night of a back-to-back.`);
+    if (hr != null && ar != null && hr > 0 && ar > 0 && Math.abs(hr - ar) >= 2) M.notes.push(`${hr > ar ? g.home : g.away} has ${Math.abs(hr - ar)} more days of rest.`);
+    M.h2h = hv.filter((x) => x.opp === Aw.abbr).slice(0, 5).map((x) => `${x.date}: ${x.home ? `${Aw.abbr} ${x.pa} at ${H.abbr} ${x.pf}` : `${H.abbr} ${x.pf} at ${Aw.abbr} ${x.pa}`}`);
+    if (Math.min(ha.n, aa.n) < 10) M.context.push('Early in the season, so these numbers are a small sample.');
+    M.context.push('Rest days and late scratches move NBA lines a lot. Check the injury report close to tip-off.');
+    M.inj = { home: bad(H.full), away: bad(Aw.full) };
+    out.set(g.id, { M, h: H.abbr, a: Aw.abbr });
+  }
+  return out;
+}
+
 /* ---------- 6b. Written analysis: plain-English summary built from the lines and the numbers above (no AI service, no cost) ---------- */
 const am = (o) => (o > 0 ? '+' + o : String(o));
 const pfloat = (r) => (r ? parseFloat(String(r.home.v)) : NaN);
@@ -402,9 +465,10 @@ export function analysis(g, M) {
   const out = [], H = g.home, A = g.away;
   // 1. what the market says
   const m = [];
-  if (g.spread && g.spread.line !== 0 && (g.sport === 'nfl' || g.sport === 'ncaaf')) {
-    const fav = g.spread.line < 0 ? H : A, pts = Math.abs(g.spread.line);
-    m.push(`The market has ${fav} as a ${pts}-point favourite${g.ml ? '' : '.'}`);
+  const pts = ['nfl', 'ncaaf', 'nba'].includes(g.sport); // sports where the spread and total are in points
+  if (g.spread && g.spread.line !== 0 && pts) {
+    const fav = g.spread.line < 0 ? H : A, spts = Math.abs(g.spread.line);
+    m.push(`The market has ${fav} as a ${spts}-point favourite${g.ml ? '' : '.'}`);
   }
   if (g.ml && g.ml.fair != null) {
     const homeFav = g.ml.fair >= 50, fav = homeFav ? H : A, pct = homeFav ? g.ml.fair : 100 - g.ml.fair, o = (homeFav ? g.ml.home : g.ml.away);
@@ -423,7 +487,7 @@ export function analysis(g, M) {
   // 3. what stands out (the notes above, in order)
   if (M.notes.length) out.push(`Worth knowing: ${M.notes.slice(0, 4).join(' ')}`);
   // 4. what the total implies against how each team actually scores (football only: the spread and total translate into points)
-  if (g.total && g.spread && (g.sport === 'nfl' || g.sport === 'ncaaf')) {
+  if (g.total && g.spread && pts) {
     const ph = pfloat(M.stats.find((r) => r.label === 'Points per game')), pa = M.stats.find((r) => r.label === 'Points per game');
     const paw = pa ? parseFloat(String(pa.away.v)) : NaN;
     if (Number.isFinite(ph) && Number.isFinite(paw)) {
@@ -432,7 +496,7 @@ export function analysis(g, M) {
     }
   }
   // 5. caution
-  const tail = { nhl: 'Starting goalies are not confirmed until game day and can move a line a lot.', mlb: 'Lineups and bullpen availability are not included and can change the picture.', nfl: 'Late injury news and weather can change this, so check the lineup before kickoff.', ncaaf: 'Late injury news and depth-chart changes can change this, so check before kickoff.' }[g.sport];
+  const tail = { nhl: 'Starting goalies are not confirmed until game day and can move a line a lot.', mlb: 'Lineups and bullpen availability are not included and can change the picture.', nfl: 'Late injury news and weather can change this, so check the lineup before kickoff.', ncaaf: 'Late injury news and depth-chart changes can change this, so check before kickoff.', nba: 'Rest and late scratches can move an NBA line a lot, so check the injury report before tip-off.' }[g.sport];
   out.push(`${tail} This summarises the numbers on this page and is not a prediction or betting advice.`);
   return out;
 }
@@ -442,13 +506,13 @@ export async function buildGames(errors) {
   resetClock();
   const sports = (process.env.SPORTS || 'nhl,nfl,mlb').split(',').map((x) => x.trim());
   const all = [];
-  for (const sport of ['nfl', 'ncaaf', 'nhl', 'mlb']) {
+  for (const sport of ['nfl', 'ncaaf', 'nba', 'nhl', 'mlb']) {
     if (!sports.includes(sport) || !GAMELINES[sport]) continue;
     const games = GAMELINES[sport].events.map(({ e, o }) => gameFromOdds(sport, e, o));
     DEBUG[`${sport}Games`] = { events: games.length, withMoneyline: games.filter((g) => g.ml).length, withSpread: games.filter((g) => g.spread).length, withTotal: games.filter((g) => g.total).length };
     let cards = new Map();
     try {
-      const fn = { nfl: nflCards, ncaaf: cfbCards, nhl: nhlCards, mlb: mlbCards }[sport];
+      const fn = { nfl: nflCards, ncaaf: cfbCards, nba: nbaCards, nhl: nhlCards, mlb: mlbCards }[sport];
       cards = await fn(games, errors);
     } catch (e) { errors.push(`${sport} matchups: ${e.message}`); }
     for (const g of games) {
