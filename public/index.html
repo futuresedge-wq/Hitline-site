@@ -188,6 +188,8 @@ button,select,input{font:inherit;color:inherit}
 .pleg{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 0;border-top:1px solid var(--line)}
 .pleg:first-child{border-top:0}
 .pleg .r{text-align:right}
+.pick{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line);cursor:pointer}
+.pick input{width:20px;height:20px;accent-color:var(--acc,#ff8a3d)}.pick .r{text-align:right}
 .psum{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
 .psum>div{border:1px solid var(--line);border-radius:10px;padding:8px 10px}.psum b{display:block;font:800 20px/1.2 'Bricolage Grotesque',sans-serif}
 
@@ -297,7 +299,7 @@ button,select,input{font:inherit;color:inherit}
 
 <div id="pmodal" class="modal" role="dialog" aria-modal="true" aria-labelledby="pTitle">
   <div class="sheet">
-    <div class="row"><div><h2 id="pTitle" style="font-size:22px">Parlay builder</h2><div class="mut">Built from the props on your screen, using your Over/Under, sample and odds filters.</div></div><button class="btn" id="pClose" aria-label="Close">Close</button></div>
+    <div class="row"><div><h2 id="pTitle" style="font-size:22px">Parlay builder</h2><div class="mut">Let Hitline search your screen or everything, or pick the legs yourself.</div></div><button class="btn" id="pClose" aria-label="Close">Close</button></div>
     <div id="pBody"></div>
   </div>
 </div>
@@ -711,21 +713,51 @@ document.addEventListener('keydown',e=>{
    A parlay has to be placed at ONE sportsbook, so legs are priced at the same book. Each leg's chance is its hit rate
    pulled toward the price's own implied chance (small samples overstate), and the parlay's chance is those multiplied,
    which assumes the legs do not affect each other. One leg per game and per player keeps that assumption reasonable. */
-S.px={n:4,goal:'safe',scope:'view',book:'any',stake:10,ex:[]};
+S.px={n:4,goal:'safe',src:'view',book:'any',stake:10,ex:[],pick:[]};
+/* Game lines as parlay legs. There is no hit rate for a team, so the chance is the market's own: the average no-vig price across the books. */
+function gameCands(all){
+  const now=Date.now(),out=[],avg=a=>a.reduce((t,x)=>t+x,0)/a.length,nv=(a,b)=>implied(a)/(implied(a)+implied(b))*100;
+  const add=(g,id,title,kind,fair,rows)=>{
+    for(const r of rows){
+      if(REF.test(r.book)||r.odds==null||!oddsOk({odds:r.odds}))continue;
+      const imp=implied(r.odds);
+      out.push({g,id,title,sub:`${kind} · ${g.away} @ ${g.home}`,b:{book:r.book,link:r.link,odds:r.odds},imp,est:fair,edge:fair-imp,gk:gamePropKey(g),pl:null});
+    }
+  };
+  for(const g of GAMES){
+    if(new Date(g.start)<=now)continue;
+    if(!all&&(g.sport!==S.sport||(S.game!=='all'&&gamePropKey(g)!==S.game)))continue;
+    if(g.ml&&g.ml.fair!=null&&g.ml.books){
+      add(g,`g:${g.id}:mlh`,`${g.home} to win`,'Moneyline',g.ml.fair,g.ml.books.map(b=>({book:b.book,link:b.link,odds:b.home})));
+      add(g,`g:${g.id}:mla`,`${g.away} to win`,'Moneyline',100-g.ml.fair,g.ml.books.map(b=>({book:b.book,link:b.link,odds:b.away})));
+    }
+    const sp=g.spread&&g.spread.books?g.spread.books.filter(b=>b.line===g.spread.line&&b.home!=null&&b.away!=null):[];
+    if(sp.length){const f=avg(sp.map(b=>nv(b.home,b.away)));
+      add(g,`g:${g.id}:sph`,`${g.home} ${fl(g.spread.line)}`,'Spread',f,sp.map(b=>({book:b.book,link:b.link,odds:b.home})));
+      add(g,`g:${g.id}:spa`,`${g.away} ${fl(-g.spread.line)}`,'Spread',100-f,sp.map(b=>({book:b.book,link:b.link,odds:b.away})));}
+    const tt=g.total&&g.total.books?g.total.books.filter(b=>b.line===g.total.line&&b.over!=null&&b.under!=null):[];
+    if(tt.length){const f=avg(tt.map(b=>nv(b.over,b.under)));
+      add(g,`g:${g.id}:tto`,`Over ${g.total.line}`,'Total',f,tt.map(b=>({book:b.book,link:b.link,odds:b.over})));
+      add(g,`g:${g.id}:ttu`,`Under ${g.total.line}`,'Total',100-f,tt.map(b=>({book:b.book,link:b.link,odds:b.under})));}
+  }
+  return out;
+}
 function pxCands(){
-  const now=Date.now(),min=(S.split==='home'||S.split==='away')?3:5;
-  const ents=DB.filter(p=>S.px.scope==='all'||(p.sport===S.sport&&(S.game==='all'||gameKey(p)===S.game)&&(S.market==='all'||p.market===S.market)))
+  const X=S.px,now=Date.now(),min=(S.split==='home'||S.split==='away')?3:5,all=X.src==='all';
+  const ents=DB.filter(p=>all||(p.sport===S.sport&&(S.game==='all'||gameKey(p)===S.game)&&(S.market==='all'||p.market===S.market)))
     .flatMap(sidesOf).filter(p=>p&&oddsOk(p)&&new Date(p.start)>now);
   const out=[];
   for(const p of ents){
     const st=stats(p,S.split,p.line);if(st.n<min)continue;
     for(const b of (p.books||[]).filter(b=>b.line===p.line&&!REF.test(b.book)&&b.odds!=null)){
       const imp=implied(b.odds),est=(st.hits+4*imp/100)/(st.n+4)*100;
-      out.push({p,st,b,imp,est,edge:est-imp,id:slipKey(p)});
+      out.push({p,st,b,imp,est,edge:est-imp,id:slipKey(p),gk:gameKey(p),pl:p.sport+'|'+p.player});
     }
   }
+  if(all||X.src==='pick')out.push(...gameCands(all));
   return out;
 }
+const pxTotals=legs=>{const dc=legs.reduce((t,c)=>t*dec(c.b.odds),1),pe=legs.reduce((t,c)=>t*c.est/100,1),pi=legs.reduce((t,c)=>t*c.imp/100,1);return{dec:dc,pe:pe*100,pi:pi*100}};
 function pxBuild(cands){
   const N=S.px.n,books=[...new Set(cands.map(c=>c.b.book))].sort();
   const use=S.px.book==='any'?books:books.filter(b=>b===S.px.book);
@@ -735,50 +767,95 @@ function pxBuild(cands){
     const pool=cands.filter(c=>c.b.book===bk&&!S.px.ex.includes(c.id)).sort((a,b)=>key(b)-key(a)||b.est-a.est);
     const legs=[],games=new Set(),players=new Set();
     for(const c of pool){
-      const g=gameKey(c.p),pl=c.p.sport+'|'+c.p.player;
-      if(games.has(g)||players.has(pl))continue;
-      legs.push(c);games.add(g);players.add(pl);if(legs.length===N)break;
+      if(games.has(c.gk)||(c.pl&&players.has(c.pl)))continue;
+      legs.push(c);games.add(c.gk);if(c.pl)players.add(c.pl);if(legs.length===N)break;
     }
     if(!legs.length)continue;
-    const dc=legs.reduce((t,c)=>t*dec(c.b.odds),1),pe=legs.reduce((t,c)=>t*c.est/100,1),pi=legs.reduce((t,c)=>t*c.imp/100,1);
+    const t=pxTotals(legs),pe=t.pe/100,pi=t.pi/100;
     const score=(legs.length*1e6)+(S.px.goal==='safe'?pe:pe/pi)*1e3; // fill the legs first, then the better parlay
-    if(!best||score>best.score)best={book:bk,legs,dec:dc,pe:pe*100,pi:pi*100,score};
+    if(!best||score>best.score)best={book:bk,legs,dec:t.dec,pe:t.pe,pi:t.pi,score};
   }
   return {best,books};
 }
+// Pick-your-own: every book that offers all of the ticked legs, best combined price first
+function pxPicked(cands){
+  const ids=S.px.pick.filter(id=>cands.some(c=>c.id===id)),rows=[];
+  if(ids.length<2)return {ids,rows};
+  for(const bk of new Set(cands.map(c=>c.b.book))){
+    const legs=ids.map(id=>cands.find(c=>c.id===id&&c.b.book===bk));
+    if(legs.every(Boolean))rows.push(Object.assign({book:bk,legs},pxTotals(legs)));
+  }
+  rows.sort((a,b)=>b.dec-a.dec);
+  return {ids,rows};
+}
 const decToAm=d=>d>=2?'+'+Math.round((d-1)*100):String(Math.round(-100/(d-1)));
-function drawParlay(){
-  const cands=pxCands(),{best,books}=pxBuild(cands),X=S.px;
-  const seg=(k,items)=>items.map(([v,l])=>`<button class="${'chip'}${X[k]===v?' on':''}" aria-pressed="${X[k]===v}" data-pk="${k}" data-pv="${esc(v)}">${esc(l)}</button>`).join('');
-  let h=`<div class="pctl"><span class="step"><span class="mut">Legs</span><button class="btn" id="pMinus" aria-label="Fewer legs">−</button><b>${X.n}</b><button class="btn" id="pPlus" aria-label="More legs">+</button></span>
-    <span class="chips">${seg('goal',[['safe','Safest'],['value','Best value']])}</span>
-    <span class="chips">${seg('scope',[['view','This view'],['all','All sports']])}</span>
-    <label class="mut">Book <select id="pBook" class="field"><option value="any">Best available</option>${books.map(b=>`<option value="${esc(b)}"${X.book===b?' selected':''}>${esc(b)}</option>`).join('')}</select></label>
-    <label class="mut">Stake $ <input id="pStake" class="field" type="number" min="1" max="10000" step="1" value="${X.stake}" style="width:80px"></label></div>`;
-  if(!best){
-    h+=`<div class="card" style="margin-top:12px">No legs qualify with your current filters${S.px.ex.length?' (try Reset)':''}. Loosen the odds limits or the minimum sample, switch to All sports, or check back when more games have lines.</div>`;
-  }else{
-    const L=best.legs,short=L.length<X.n;
-    h+=`<h4>${L.length}-leg parlay at ${esc(best.book)}</h4>`;
-    if(short)h+=`<div class="mut" style="margin-bottom:6px">Only ${L.length} legs qualify at ${esc(best.book)} (one per game and player). Try All sports or another book for more.</div>`;
-    h+=`<div class="ctx" style="gap:0">`+L.map(c=>`<div class="pleg"><div><b>${esc(c.p.player)}</b> ${injTag(c.p)}<div class="mut">${SW(c.p)} ${c.p.line} ${esc(c.p.market.toLowerCase())} · ${matchup(c.p)}</div></div>
+const pct1=x=>x<1?x.toFixed(1):Math.round(x);
+function legHtml(c){
+  const when=`${esc(fmtTime((c.p||c.g).start))}${safeUrl(c.b.link)?` · <a href="${esc(c.b.link)}" target="_blank" rel="noopener noreferrer nofollow">Open game at ${esc(c.b.book)}</a>`:''}`;
+  if(c.g)return `<div class="pleg"><div><b>${esc(c.title)}</b><div class="mut">${esc(c.sub)}</div></div><div class="r"><b>${fmtOdds(c.b.odds)}</b><div class="mut">market chance ${Math.round(c.est)}%</div></div><div class="mut" style="grid-column:1/-1;font-size:12px">${when}</div></div>`;
+  return `<div class="pleg"><div><b>${esc(c.p.player)}</b> ${injTag(c.p)}<div class="mut">${SW(c.p)} ${c.p.line} ${esc(c.p.market.toLowerCase())} · ${matchup(c.p)}</div></div>
       <div class="r"><b>${fmtOdds(c.b.odds)}</b><div class="mut">${c.st.hits}/${c.st.n} ${isU(c.p)?'under':'over'} (${c.st.pct}%)</div></div>
-      <div class="mut" style="grid-column:1/-1;font-size:12px">${esc(fmtTime(c.p.start))}${safeUrl(c.b.link)?` · <a href="${esc(c.b.link)}" target="_blank" rel="noopener noreferrer nofollow">Open game at ${esc(c.b.book)}</a>`:''}</div></div>`).join('')+`</div>`;
-    const stake=Math.max(0,+X.stake||0),ret=stake*best.dec;
-    h+=`<div class="psum"><div><span class="mut">Combined odds</span><b>${decToAm(best.dec)}</b></div><div><span class="mut">$${stake.toFixed(0)} returns</span><b>$${ret.toFixed(2)}</b></div><div><span class="mut">Estimated chance</span><b>${best.pe<1?best.pe.toFixed(1):Math.round(best.pe)}%</b></div><div><span class="mut">Odds imply</span><b>${best.pi<1?best.pi.toFixed(1):Math.round(best.pi)}%</b></div></div>`;
-    h+=`<div class="mut" style="font-size:12px;margin-top:8px">Estimated chance multiplies each leg's hit rate (pulled toward its price) and assumes the legs do not affect each other. Small samples and the sportsbook's margin are why even a "safe" parlay usually loses. Prices can differ from the sportsbook's own parlay price, so confirm before betting. A parlay needs every leg to win.</div>`;
-    h+=`<div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap"><button class="btn pri" id="pSlip">Add all legs to my slip</button><button class="btn" id="pAnother">Try another</button>${X.ex.length?'<button class="btn" id="pReset">Reset</button>':''}</div>`;
+      <div class="mut" style="grid-column:1/-1;font-size:12px">${when}</div></div>`;
+}
+function summaryHtml(t,legs){
+  const stake=Math.max(0,+S.px.stake||0),ret=stake*t.dec,hasG=legs.some(c=>c.g);
+  return `<div class="psum"><div><span class="mut">Combined odds</span><b>${decToAm(t.dec)}</b></div><div><span class="mut">$${stake.toFixed(0)} returns</span><b>$${ret.toFixed(2)}</b></div><div><span class="mut">Estimated chance</span><b>${pct1(t.pe)}%</b></div><div><span class="mut">Odds imply</span><b>${pct1(t.pi)}%</b></div></div>
+    <div class="mut" style="font-size:12px;margin-top:8px">Estimated chance multiplies each leg's chance and assumes the legs do not affect each other. A player leg uses its hit rate (pulled toward its price).${hasG?' A game leg uses the market\'s own chance, the average price across books with the margin removed.':''} Small samples and the sportsbook's margin are why even a "safe" parlay usually loses. Prices can differ from the sportsbook's own parlay price, so confirm before betting. A parlay needs every leg to win.</div>`;
+}
+function drawParlay(){
+  const X=S.px,sheet=$('pmodal').querySelector('.sheet'),top=sheet?sheet.scrollTop:0,cands=pxCands(),pick=X.src==='pick';
+  const seg=(k,items)=>items.map(([v,l])=>`<button class="${'chip'}${X[k]===v?' on':''}" aria-pressed="${X[k]===v}" data-pk="${k}" data-pv="${esc(v)}">${esc(l)}</button>`).join('');
+  const books=[...new Set(cands.map(c=>c.b.book))].sort();
+  let h=`<div class="pctl"><span class="chips">${seg('src',[['view','Best from this view'],['all','Best of everything'],['pick','Pick my own']])}</span></div>
+    <div class="mut" style="font-size:13px;margin-top:6px">${pick?'Tick the legs you want from what is on your screen. Hitline prices them together at each sportsbook.':X.src==='all'?'Searches every sport, with player props and game lines (moneyline, spread, total) together.':'Searches the props on your screen, using your sport, game, market, Over/Under and odds filters.'}</div>
+    <div class="pctl">${pick?'':`<span class="step"><span class="mut">Legs</span><button class="btn" id="pMinus" aria-label="Fewer legs">−</button><b>${X.n}</b><button class="btn" id="pPlus" aria-label="More legs">+</button></span>
+    <span class="chips">${seg('goal',[['safe','Safest'],['value','Best value']])}</span>
+    <label class="mut">Book <select id="pBook" class="field"><option value="any">Best available</option>${books.map(b=>`<option value="${esc(b)}"${X.book===b?' selected':''}>${esc(b)}</option>`).join('')}</select></label>`}
+    <label class="mut">Stake $ <input id="pStake" class="field" type="number" min="1" max="10000" step="1" value="${X.stake}" style="width:80px"></label></div>`;
+  let best=null,pk=null;
+  if(pick){
+    pk=pxPicked(cands);
+    // one row per leg, shown at its best price
+    const by=new Map();for(const c of cands){const o=by.get(c.id);if(!o||dec(c.b.odds)>dec(o.b.odds))by.set(c.id,c)}
+    const all=[...by.values()],props=all.filter(c=>c.p).sort((a,b)=>b.est-a.est).slice(0,40),gms=all.filter(c=>c.g).sort((a,b)=>(a.g.start<b.g.start?-1:1)||(a.id<b.id?-1:1));
+    const row=c=>`<label class="pick"><input type="checkbox" data-pp="${esc(c.id)}"${X.pick.includes(c.id)?' checked':''}><span><b>${esc(c.p?c.p.player:c.title)}</b><span class="mut" style="display:block;font-size:13px">${c.p?`${SW(c.p)} ${c.p.line} ${esc(c.p.market.toLowerCase())} · ${esc(c.p.team)} ${c.p.home?'vs':'@'} ${esc(c.p.opp)}`:esc(c.sub)}</span></span><span class="r"><b>${fmtOdds(c.b.odds)}</b><span class="mut" style="display:block;font-size:12px">${c.p?`${c.st.hits}/${c.st.n} (${c.st.pct}%)`:`chance ${Math.round(c.est)}%`}</span></span></label>`;
+    h+=`<h4>Player props${props.length?` (top ${props.length} on screen)`:''}</h4>${props.length?props.map(row).join(''):'<div class="mut">No props match your current filters.</div>'}`;
+    if(gms.length)h+=`<h4>Game lines</h4>`+gms.map(row).join('');
+    if(pk.ids.length<2)h+=`<div class="card" style="margin-top:12px">Tick at least 2 legs to see the parlay.</div>`;
+    else if(!pk.rows.length)h+=`<div class="card" style="margin-top:12px">No single sportsbook offers all ${pk.ids.length} legs. Remove one or pick legs that share a book.</div>`;
+    else{
+      best=pk.rows[0];const L=best.legs,gk=L.map(c=>c.gk),pl=L.map(c=>c.pl).filter(Boolean);
+      h+=`<h4>${L.length}-leg parlay at ${esc(best.book)}</h4>`;
+      if(new Set(gk).size<gk.length||new Set(pl).size<pl.length)h+=`<div class="card" style="margin-bottom:8px">Some legs come from the same game or player, so they are not independent. The chance below is probably off, and many sportsbooks will not take these together as a standard parlay.</div>`;
+      h+=`<div class="ctx" style="gap:0">${L.map(legHtml).join('')}</div>`+summaryHtml(best,L);
+      if(pk.rows.length>1){const stake=Math.max(0,+X.stake||0);h+=`<h4>Other sportsbooks with all ${L.length} legs</h4>`+pk.rows.slice(1).map(r=>`<div class="brow"><span><b>${esc(r.book)}:</b> ${decToAm(r.dec)}</span><span class="mut">$${stake.toFixed(0)} returns $${(stake*r.dec).toFixed(2)}</span></div>`).join('')}
+      h+=`<div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">${L.some(c=>c.p)?`<button class="btn pri" id="pSlip">Add ${L.some(c=>c.g)?'player legs':'all legs'} to my slip</button>`:''}<button class="btn" id="pClear">Clear picks</button></div>`;
+    }
+  }else{
+    ({best}=pxBuild(cands));
+    if(!best){
+      h+=`<div class="card" style="margin-top:12px">No legs qualify with your current filters${X.ex.length?' (try Reset)':''}. Loosen the odds limits or the minimum sample, try Best of everything, or check back when more games have lines.</div>`;
+    }else{
+      const L=best.legs,short=L.length<X.n;
+      h+=`<h4>${L.length}-leg parlay at ${esc(best.book)}</h4>`;
+      if(short)h+=`<div class="mut" style="margin-bottom:6px">Only ${L.length} legs qualify at ${esc(best.book)} (one per game and player). Try Best of everything or another book for more.</div>`;
+      h+=`<div class="ctx" style="gap:0">${L.map(legHtml).join('')}</div>`+summaryHtml(best,L);
+      h+=`<div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">${L.some(c=>c.p)?`<button class="btn pri" id="pSlip">Add ${L.some(c=>c.g)?'player legs':'all legs'} to my slip</button>`:''}<button class="btn" id="pAnother">Try another</button>${X.ex.length?'<button class="btn" id="pReset">Reset</button>':''}</div>`;
+    }
   }
   h+=`<div class="mut" style="font-size:12px;margin-top:12px">19+ in Ontario. If gambling stops being fun, ConnexOntario offers free support at 1-866-531-2600.</div>`;
   $('pBody').innerHTML=h;
+  if(sheet)sheet.scrollTop=top;
   $('pBody').querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{X[b.dataset.pk]=b.dataset.pv;X.ex=[];drawParlay()});
-  $('pMinus').onclick=()=>{X.n=Math.max(2,X.n-1);X.ex=[];drawParlay()};
-  $('pPlus').onclick=()=>{X.n=Math.min(10,X.n+1);X.ex=[];drawParlay()};
-  $('pBook').onchange=e=>{X.book=e.target.value;X.ex=[];drawParlay()};
+  $('pBody').querySelectorAll('[data-pp]').forEach(b=>b.onchange=()=>{const id=b.dataset.pp;X.pick=b.checked?[...X.pick,id]:X.pick.filter(x=>x!==id);drawParlay()});
+  if($('pMinus'))$('pMinus').onclick=()=>{X.n=Math.max(2,X.n-1);X.ex=[];drawParlay()};
+  if($('pPlus'))$('pPlus').onclick=()=>{X.n=Math.min(10,X.n+1);X.ex=[];drawParlay()};
+  if($('pBook'))$('pBook').onchange=e=>{X.book=e.target.value;X.ex=[];drawParlay()};
   $('pStake').onchange=e=>{X.stake=Math.min(10000,Math.max(1,+e.target.value||10));drawParlay()};
-  if($('pSlip'))$('pSlip').onclick=()=>{best.legs.forEach(c=>{if(!S.slip.includes(c.id))S.slip.push(c.id)});saveSlip();render();$('pSlip').textContent='Added to My slip'};
+  if($('pSlip'))$('pSlip').onclick=()=>{best.legs.filter(c=>c.p).forEach(c=>{if(!S.slip.includes(c.id))S.slip.push(c.id)});saveSlip();render();$('pSlip').textContent='Added to My slip'};
   if($('pAnother'))$('pAnother').onclick=()=>{X.ex.push(best.legs[0].id);drawParlay()};
   if($('pReset'))$('pReset').onclick=()=>{X.ex=[];drawParlay()};
+  if($('pClear'))$('pClear').onclick=()=>{X.pick=[];drawParlay()};
 }
 function openParlay(){S.pm=true;lastFocus=document.activeElement;S.px.ex=[];drawParlay();document.documentElement.style.overflow='hidden';$('pmodal').classList.add('open');$('pClose').focus();$('pmodal').querySelector('.sheet').scrollTop=0}
 function closeParlay(){S.pm=false;document.documentElement.style.overflow='';$('pmodal').classList.remove('open');if(lastFocus&&document.contains(lastFocus))lastFocus.focus()}
