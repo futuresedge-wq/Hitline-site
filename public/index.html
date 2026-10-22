@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0e1210">
+<meta name="theme-color" content="#140f0b">
 <title>Hitline – Player Prop Research</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
@@ -16,9 +16,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;600;700&display=swap">
 <style>
-:root{--bg:#0e1210;--card:#161c18;--card2:#1c241f;--line:#26302a;--tx:#e8efe9;--mut:#8a9a8f;--acc:#c6f24e;--onacc:#0e1210;--onmiss:#0e1210;--hit:#c6f24e;--miss:#ff6b57;--mid:#f2b84e;--glass:rgba(14,18,16,.88);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-:root[data-theme="light"]{--bg:#f4f6f1;--card:#fff;--card2:#eef2ea;--line:#d9e0d5;--tx:#18211b;--mut:#5d6d62;--acc:#2f6b00;--onacc:#fff;--onmiss:#fff;--hit:#2f6b00;--miss:#c4361f;--mid:#9a6a00;--glass:rgba(244,246,241,.9)}
-@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f6f1;--card:#fff;--card2:#eef2ea;--line:#d9e0d5;--tx:#18211b;--mut:#5d6d62;--acc:#2f6b00;--onacc:#fff;--onmiss:#fff;--hit:#2f6b00;--miss:#c4361f;--mid:#9a6a00;--glass:rgba(244,246,241,.9)}}
+:root{--bg:#140f0b;--card:#1d1611;--card2:#271d16;--line:#3a2b21;--tx:#f5ece4;--mut:#a89787;--acc:#ff8a3d;--onacc:#1a0d03;--onmiss:#140f0b;--hit:#7bdc6c;--miss:#ff5c5c;--mid:#ffc857;--glass:rgba(20,15,11,.88);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root[data-theme="light"]{--bg:#fbf6f0;--card:#fff;--card2:#f6ede3;--line:#e8dccd;--tx:#2a1d12;--mut:#7a6654;--acc:#c2570c;--onacc:#fff;--onmiss:#fff;--hit:#1f7a3a;--miss:#c4361f;--mid:#9a6a00;--glass:rgba(251,246,240,.9)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#fbf6f0;--card:#fff;--card2:#f6ede3;--line:#e8dccd;--tx:#2a1d12;--mut:#7a6654;--acc:#c2570c;--onacc:#fff;--onmiss:#fff;--hit:#1f7a3a;--miss:#c4361f;--mid:#9a6a00;--glass:rgba(251,246,240,.9)}}
 [hidden]{display:none!important}
 *{box-sizing:border-box}html{scroll-padding-top:150px}
 body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 Figtree,system-ui,sans-serif}
@@ -228,7 +228,7 @@ button,select,input{font:inherit;color:inherit}
 <body>
 <div class="wrap">
   <div class="head">
-    <div><h1><svg width="34" height="34" viewBox="0 0 1024 1024" aria-hidden="true" style="flex:none"><rect width="1024" height="1024" rx="230" fill="#0e1210"/><rect x="282" y="540" width="120" height="220" rx="30" fill="#ff6b57"/><rect x="452" y="400" width="120" height="360" rx="30" fill="#c6f24e"/><rect x="622" y="280" width="120" height="480" rx="30" fill="#c6f24e"/><rect x="282" y="720" width="120" height="40" fill="#ff6b57"/><rect x="452" y="720" width="120" height="40" fill="#c6f24e"/><rect x="622" y="720" width="120" height="40" fill="#c6f24e"/><path d="M225 460H800" stroke="#e8efe9" stroke-width="22" stroke-linecap="round" stroke-dasharray="56 34"/></svg>Hitline</h1><div class="mut sub">See how often a prop line actually hits, and what the odds are charging for it.</div></div>
+    <div><h1><svg width="34" height="34" viewBox="0 0 1024 1024" aria-hidden="true" style="flex:none"><rect width="1024" height="1024" rx="230" fill="#140f0b"/><rect x="282" y="540" width="120" height="220" rx="30" fill="#a89787"/><rect x="452" y="400" width="120" height="360" rx="30" fill="#ff8a3d"/><rect x="622" y="280" width="120" height="480" rx="30" fill="#ff8a3d"/><rect x="282" y="720" width="120" height="40" fill="#a89787"/><rect x="452" y="720" width="120" height="40" fill="#ff8a3d"/><rect x="622" y="720" width="120" height="40" fill="#ff8a3d"/><path d="M225 460H800" stroke="#f5ece4" stroke-width="22" stroke-linecap="round" stroke-dasharray="56 34"/></svg>Hitline</h1><div class="mut sub">See how often a prop line actually hits, and what the odds are charging for it.</div></div>
     <div class="mut" id="upd"></div>
   </div>
 
@@ -268,7 +268,7 @@ button,select,input{font:inherit;color:inherit}
   <div id="grid" class="list"></div>
   <section id="record" class="rec" hidden aria-label="Track record"></section>
 
-  <div class="foot">Hit rates describe past games and do not predict results. Stats come from the NHL, nflverse, MLB and College Football Data, matchup notes are computed from those stats and are not predictions, lines from PropLine and injuries from ESPN, so they can lag official team reports. 19+ in Ontario. If gambling stops being fun, ConnexOntario offers free support at 1-866-531-2600.</div>
+  <div class="foot">Hit rates describe past games and do not predict results. Stats come from the NHL, ESPN (NBA), nflverse, MLB and College Football Data, matchup notes are computed from those stats and are not predictions, lines from PropLine and injuries from ESPN, so they can lag official team reports. 19+ in Ontario. If gambling stops being fun, ConnexOntario offers free support at 1-866-531-2600.</div>
 </div>
 
 <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
@@ -303,7 +303,7 @@ button,select,input{font:inherit;color:inherit}
 </div>
 
 <script>
-const SPORTS={nhl:'NHL',nfl:'NFL',mlb:'MLB',ncaaf:'NCAAF'};
+const SPORTS={nhl:'NHL',nba:'NBA',nfl:'NFL',mlb:'MLB',ncaaf:'NCAAF'};
 let LOGOS={};
 const SPLITS=[['l5','L5'],['l10','L10'],['l20','L20'],['home','Home'],['away','Away']];
 const TABS=[['games','Games'],['cheat','Cheatsheet'],['all','All props'],['rec','Record'],['slip','My slip']];
